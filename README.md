@@ -4,13 +4,15 @@ AI Orchestrator é um workspace manager local para coordenar tarefas de software
 
 ## Estado atual
 
-O MVP inclui Workspaces local/Git/SSH (modelo preparado), tarefas, pipeline configurável, MockAdapter, SQLite, eventos SSE, cancelamento estrutural, timeout/policies, custos e tokens simulados e uma interface operacional dark-first.
+O MVP inclui Workspaces local/Git/SSH (modelo preparado), tarefas, pipeline configurável, MockAdapter, Codex CLI reviewer opcional, SQLite, eventos SSE, cancelamento estrutural, timeout/policies, custos e tokens simulados e uma interface operacional dark-first.
 
 > Nenhum provider real, token ou API paga é integrado nesta fase.
 
 ## Instalação e execução
 
-Requisitos: Node.js 20+ e pnpm 9+.
+Requisitos: **Node.js 22 LTS** e pnpm 9+. Node 24 não é suportado nesta etapa por causa da compatibilidade do `better-sqlite3`.
+
+Após clonar, o fluxo de desenvolvimento é direto: `pnpm install` e `pnpm dev`. O script `predev` compila os packages internos automaticamente.
 
 ```bash
 pnpm install

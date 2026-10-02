@@ -77,3 +77,16 @@ curl http://localhost:4000/api/providers
 ```
 
 Isso não executa uma task de review e não consome créditos de modelo.
+
+## Resolução cross-platform e diagnóstico
+
+O adapter resolve o executável nesta ordem:
+
+1. `CODEX_CLI_PATH` ou `CODEX_EXECUTABLE`;
+2. PATH do processo.
+
+No Windows, a ordem no PATH é `codex.cmd`, `codex.exe`, `codex`. O wrapper `.ps1` não é escolhido como primeira opção. O diretório `%APPDATA%\\npm` também é considerado quando `APPDATA` está disponível. Para `.cmd`, o adapter habilita `shell` somente nesse processo específico; não usa `shell: true` globalmente.
+
+O health check executa apenas `--version`. A autenticação não é inferida a partir desse comando: enquanto não existir uma checagem segura sem consumo de créditos, o estado é `unknown`.
+
+`GET /api/providers` informa `resolvedExecutable`, `available`, `version`, `authenticationStatus`, `lastCheckAt`, `latencyMs` e `error`, sem expor secrets.
