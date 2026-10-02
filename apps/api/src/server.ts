@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 import {nanoid} from 'nanoid';import {createHash} from 'node:crypto';
 import {CodexCliAdapter,MockAdapter,ReviewerProviderRouter} from '@orchestrator/adapters';
 import {BudgetGuard,ExecutionWatchdog,PipelineRunner,WorkspaceLockManager,resumeIndex} from '@orchestrator/core';
-import {DEFAULT_GATES,DEFAULT_PIPELINE,DEFAULT_POLICY,DEFAULT_RETENTION,type AgentRole,type ArtifactType,type FailureKind} from '@orchestrator/shared';
+import {DEFAULT_GATES,DEFAULT_PIPELINE,DEFAULT_POLICY,DEFAULT_RETENTION,makeSseEnvelope,type AgentRole,type ArtifactType,type FailureKind} from '@orchestrator/shared';
 import {configForRole,createTaskConfigSnapshot,toWorkspaceContext,validateWorkspaceLocation,type TaskConfigSnapshot} from './task-config.js';
 
 const db=new Database(process.env.DB_PATH||'orchestrator.db');db.pragma('journal_mode = WAL');
@@ -22,7 +22,7 @@ for(const [column,type] of [['providerSessionId','TEXT'],['conversationId','TEXT
 db.prepare('INSERT OR IGNORE INTO retention_config VALUES (1,?,?,?,?)').run(DEFAULT_RETENTION.eventsDays,DEFAULT_RETENTION.logsDays,DEFAULT_RETENTION.artifactsDays,DEFAULT_RETENTION.rawProviderResponsesDays);db.prepare('INSERT OR IGNORE INTO prompt_templates VALUES (?,?,?,?,?,?,?)').run('default-task','Default task prompt',1,'{{task.description}}','Deterministic mock template',new Date().toISOString(),1);
 const app:Express=express();app.use(cors());app.use(express.json());const clients=new Set<express.Response>();const now=()=>new Date().toISOString();const promptHash=(value:string)=>createHash('sha256').update(value).digest('hex');const locks=new WorkspaceLockManager();const running=new Map<string,AbortController>();
 function audit(action:string,metadata:Record<string,unknown>,taskId?:string,executionId?:string,provider?:string,model?:string){db.prepare('INSERT INTO audit_logs VALUES (?,?,?,?,?,?,?,?,?)').run(nanoid(),'system',action,taskId||null,executionId||null,provider||null,model||null,now(),JSON.stringify(metadata));}
-function emit(type:string,data:Record<string,unknown>,taskId?:string,executionId?:string){const event={id:nanoid(),type,taskId:taskId||null,executionId:executionId||null,payload:JSON.stringify(data),createdAt:now()};db.prepare('INSERT INTO events VALUES (?,?,?,?,?,?)').run(event.id,event.type,event.taskId,event.executionId,event.payload,event.createdAt);audit(type,data,taskId,executionId);for(const res of clients)res.write(`event: ${type}\ndata: ${JSON.stringify({...data,taskId,executionId})}\n\n`);}
+function emit(type:string,data:Record<string,unknown>,taskId?:string,executionId?:string){const event=makeSseEnvelope(type,data,taskId,executionId,now());const id=nanoid();db.prepare('INSERT INTO events VALUES (?,?,?,?,?,?)').run(id,type,taskId||null,executionId||null,JSON.stringify(event),event.timestamp);audit(type,data,taskId,executionId);for(const res of clients)res.write(`event: ${type}\ndata: ${JSON.stringify(event)}\n\n`);}
 function jsonTask(task:any){if(!task)return task;return{...task,pipeline:JSON.parse(task.pipeline),resumable:Boolean(task.resumable),configSnapshot:JSON.parse(task.configSnapshot)};}
 app.get('/health',(_,res)=>res.json({ok:true,service:'ai-orchestrator-api',runtime:'mock'}));
 app.get('/events',(_,res)=>{res.setHeader('Content-Type','text/event-stream');res.setHeader('Cache-Control','no-cache');res.setHeader('Connection','keep-alive');res.flushHeaders();clients.add(res);res.write('event: connected\ndata: {}\n\n');res.on('close',()=>clients.delete(res));});

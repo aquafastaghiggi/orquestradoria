@@ -26,3 +26,5 @@ export const DEFAULT_POLICY:SecurityPolicy={denyGitPush:true,denyDeploy:true,den
 export const DEFAULT_GATES:HumanApprovalGates={beforeImplementation:false,beforeCommit:false,beforeMerge:false,beforeDeploy:true,beforeDatabaseChange:true};
 export const DEFAULT_RETENTION:RetentionConfig={eventsDays:30,logsDays:30,artifactsDays:90,rawProviderResponsesDays:14};
 export const TASK_STATUSES:TaskStatus[]=['pending','analyzing','planning','implementing','testing','reviewing','needs_fix','approved','human_review_required','cancelled','failed','stalled'];
+
+export * from './sse.js';
