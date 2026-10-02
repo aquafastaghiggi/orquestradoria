@@ -1,0 +1,1 @@
+{"routes":[{"path":"/","title":"AI Orchestrator"},{"path":"/workspace/:id","title":"Workspace"},{"path":"/task/:id","title":"Task detail"}]}

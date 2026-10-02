@@ -1,0 +1,2 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import {MockAdapter} from '@orchestrator/adapters';
+test('MockAdapter is provider-agnostic and reports usage', async()=>{const a=new MockAdapter(); assert.equal(await a.checkAvailability(),true); const result=await a.execute({role:'reviewer',prompt:'test'}); assert.match(result.output,/APPROVED/); assert.ok(result.tokenUsage>0);});
