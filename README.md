@@ -64,3 +64,7 @@ pnpm build
 6. Cursor/outros providers
 7. custos, budgets, fallback de modelos
 8. multi-agent avançado
+
+## Controles profissionais adicionados
+
+A segunda etapa adiciona AgentConfig por snapshot de task, ProviderCapabilities, ExecutionContext, heartbeat/watchdog com `stalled`, resume a partir do último stage seguro, locks por workspace/task, budgets de tokens/custo, artifacts, audit timeline, WorkspaceTransport mock, retry policies e human approval gates estruturais.

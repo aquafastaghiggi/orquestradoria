@@ -1,4 +1,7 @@
-import type {WorkspaceType} from '@orchestrator/shared';
-export interface WorkspacePolicy {denyGitPush:boolean; denyDeploy:boolean; denyDestructiveCommands:boolean; denySecrets:boolean; timeoutMs:number; maxIterations:number; requireHumanApproval:boolean;}
-export const defaultPolicy: WorkspacePolicy = {denyGitPush:true,denyDeploy:true,denyDestructiveCommands:true,denySecrets:true,timeoutMs:120000,maxIterations:3,requireHumanApproval:false};
-export const isSupportedWorkspaceType = (type:string): type is WorkspaceType => ['local','git','ssh'].includes(type);
+import type {HumanApprovalGates,WorkspaceType} from '@orchestrator/shared';
+export interface WorkspaceTransport{type:WorkspaceType;healthCheck():Promise<boolean>;listFiles(path?:string):Promise<string[]>;readFile(path:string):Promise<string>;writeFile(path:string,content:string):Promise<void>;exec(command:string):Promise<{stdout:string;stderr:string;exitCode:number}>;gitStatus():Promise<string>;gitDiff():Promise<string>;checkout(branch:string):Promise<void>;getCurrentBranch():Promise<string>;}
+export class LocalMockTransport implements WorkspaceTransport{type='local' as const;private files=new Map<string,string>();async healthCheck(){return true;}async listFiles(){return[...this.files.keys()];}async readFile(path:string){return this.files.get(path)||'';}async writeFile(path:string,content:string){this.files.set(path,content);}async exec(command:string){return{stdout:`mock exec: ${command}`,stderr:'',exitCode:0};}async gitStatus(){return'clean (mock)';}async gitDiff(){return'';}async checkout(){return;}async getCurrentBranch(){return'main';}}
+export const defaultPolicy={denyGitPush:true,denyDeploy:true,denyDestructiveCommands:true,denySecrets:true,timeoutMs:120000,maxIterations:3,requireHumanApproval:false};
+export const defaultGates:HumanApprovalGates={beforeImplementation:false,beforeCommit:false,beforeMerge:false,beforeDeploy:true,beforeDatabaseChange:true};
+export function requiresApproval(gates:HumanApprovalGates,action:keyof HumanApprovalGates){return gates[action];}
+export const isSupportedWorkspaceType=(type:string):type is WorkspaceType=>['local','git','ssh'].includes(type);
