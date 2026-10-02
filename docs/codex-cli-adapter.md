@@ -24,7 +24,9 @@ export REVIEWER_PROVIDER=codex-cli
 export CODEX_MODEL=<model-configurado-localmente>
 export CODEX_CLI_PATH=/caminho/para/codex   # opcional
 export CODEX_TIMEOUT_MS=120000              # opcional
-export CODEX_SAFE_ARGS='exec --json --sandbox read-only --ask-for-approval never' # opcional
+export CODEX_SAFE_ARGS='exec --json --sandbox read-only' # opcional
+export PROVIDER_STALL_TIMEOUT_MS=30000             # opcional
+export CODEX_TIMEOUT_MS=120000                     # opcional
 ```
 
 O adapter não inventa modelos: `getModels()` retorna somente `CODEX_MODEL` ou entradas de catálogo fornecidas explicitamente.
@@ -52,7 +54,10 @@ O adapter:
 - não faz commit, push ou deploy;
 - não executa comandos destrutivos por instrução do prompt;
 - encerra somente o processo filho registrado para aquela execution;
-- respeita AbortSignal e timeout;
+- respeita AbortSignal e timeout total;
+- envia heartbeat periódico enquanto o processo filho está vivo, mesmo sem stdout/stderr;
+- não transforma heartbeat de liveness em progress event;
+- limpa o timer de heartbeat em success, error, timeout, cancel e close;
 - não armazena secrets;
 - não chama Codex durante testes de disponibilidade além de `codex --version`.
 
@@ -115,3 +120,11 @@ Configuration error: Unsupported Codex CLI argument: --ask-for-approval
 ```
 
 Erros de configuração, argumentos inválidos, modelo ausente, schema JSON inválido, orçamento excedido e cancelamento não são retryable. Apenas falhas transitórias de provider e timeout entram na política de retry.
+
+## Heartbeat, stall e timeout total
+
+`PROVIDER_STALL_TIMEOUT_MS` (default `30000`) é o intervalo máximo sem heartbeat antes de a execution ser marcada como `stalled`. O backend usa esse valor no `ExecutionWatchdog`.
+
+`CODEX_TIMEOUT_MS` (default `120000`) limita a duração total do processo Codex. Um processo pode ficar silencioso por dezenas de segundos sem ser stalled, porque o adapter envia `input.onHeartbeat()` periodicamente enquanto o child continua vivo. stdout/stderr geram progress events; heartbeat de liveness não gera progresso falso.
+
+Os logs operacionais distinguem `provider.heartbeat`, `watchdog.stalled`, `provider.timeout` e `provider.cancelled`.
