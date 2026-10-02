@@ -15,3 +15,11 @@ Policies ficam em `packages/workspace`: deny push/deploy/comandos destrutivos/se
 ## Controles operacionais
 
 Execution heartbeat, watchdog e estados `stalled` evitam execução silenciosa. Locks de workspace/task impedem concorrência destrutiva. Audit logs, artifacts e snapshots de configuração tornam cada task reproduzível e auditável.
+
+## Session identity e outputs
+
+Executions preservam providerSessionId, conversationId, resumeToken e parentExecutionId quando um adapter suportar sessões. O output não é reduzido a logs: stdout, stderr, progress events, structured result e raw provider response possuem campos próprios.
+
+## Migração compatível
+
+O boot aplica `ensureColumn` para acrescentar colunas de execution em bancos MVP existentes e cria as novas tabelas de catálogo, health, templates e retention com `CREATE TABLE IF NOT EXISTS`. Isso mantém o upgrade local sem provider ou migration externa.
