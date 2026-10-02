@@ -9,7 +9,7 @@ export interface HumanApprovalGates{beforeImplementation:boolean;beforeCommit:bo
 export interface Task{id:string;workspaceId:string;title:string;description:string;pipeline:AgentRole[];status:TaskStatus;currentStage?:AgentRole;lastSuccessfulStage?:AgentRole;resumable:boolean;taskBudgetUsd:number;tokenBudget:number;configSnapshot:string;createdAt:string;updatedAt:string;}
 export interface ProviderCapabilities{streaming:boolean;cancel:boolean;usageReporting:boolean;modelSelection:boolean;toolUse:boolean;filesystemAccess:boolean;sessionResume:boolean;structuredOutput:boolean;}
 export interface ModelCatalog{providerId:string;modelId:string;displayName:string;capabilities:ProviderCapabilities;contextWindow:number;inputCostPerMillion:number;outputCostPerMillion:number;enabled:boolean;metadata:Record<string,unknown>;}
-export interface ProviderHealth{providerId:string;available:boolean;authenticated:boolean;lastCheckAt?:string;latencyMs?:number;error?:string;}
+export interface ProviderHealth{providerId:string;available:boolean;authenticated:boolean;version?:string;lastCheckAt?:string;latencyMs?:number;error?:string;}
 export interface PromptTemplate{id:string;name:string;version:number;template:string;description?:string;createdAt:string;active:boolean;}
 export interface RetentionConfig{eventsDays:number;logsDays:number;artifactsDays:number;rawProviderResponsesDays:number;}
 export interface ExecutionContext{task:Task;workspaceContext:{id:string;type:WorkspaceType;location:string;branch?:string};projectRules:string[];stage:AgentRole;previousArtifacts:Artifact[];constraints:{timeoutSeconds:number;tokenBudget:number;budgetUsd:number};expectedOutputSchema?:Record<string,unknown>;}

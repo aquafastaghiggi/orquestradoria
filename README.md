@@ -68,3 +68,7 @@ pnpm build
 ## Controles profissionais adicionados
 
 A segunda etapa adiciona AgentConfig por snapshot de task, ProviderCapabilities, ExecutionContext, heartbeat/watchdog com `stalled`, resume a partir do último stage seguro, locks por workspace/task, budgets de tokens/custo, artifacts, audit timeline, WorkspaceTransport mock, retry policies e human approval gates estruturais.
+
+## Codex CLI reviewer
+
+Para habilitar somente o reviewer Codex CLI, instale e autentique o CLI localmente, configure `CODEX_MODEL` e inicie a API com `REVIEWER_PROVIDER=codex-cli`. Planner, developer e tester permanecem no MockAdapter. Consulte [docs/codex-cli-adapter.md](docs/codex-cli-adapter.md) antes de executar qualquer review real.
