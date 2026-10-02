@@ -12,3 +12,9 @@
 ## Rastreabilidade
 
 Cada execution registra também a identidade de sessão disponível, o template de prompt/version e o hash do prompt renderizado. RetentionConfig define a janela de limpeza futura para eventos, logs, artifacts e respostas brutas.
+
+## Workspace real e configuração congelada
+
+Antes de iniciar uma execution, a API carrega o workspace persistido pelo `task.workspaceId` e usa seu `id`, `type`, `location` e `branch` no `ExecutionContext`. Workspaces `local` precisam apontar para um diretório existente; caso contrário, a task é bloqueada antes da criação de qualquer provider execution e recebe evento/audit de `execution.blocked`.
+
+Na criação da task, `agentConfigs` é congelado no `configSnapshot`. Com `REVIEWER_PROVIDER=codex-cli`, planner/developer/tester ficam em `mock/mock-fast` e reviewer fica em `codex-cli/CODEX_MODEL`. Alterações posteriores no ambiente não alteram tasks já criadas. Cada registro de `execution` usa provider/model da configuração congelada do respectivo estágio.
