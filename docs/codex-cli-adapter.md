@@ -92,7 +92,7 @@ O adapter resolve o executável nesta ordem:
 
 No Windows, a ordem no PATH é `codex.cmd`, `codex.exe`, `codex`. O wrapper `.ps1` não é escolhido como primeira opção. O diretório `%APPDATA%\\npm` também é considerado quando `APPDATA` está disponível. Para `.cmd`, o adapter habilita `shell` somente nesse processo específico; não usa `shell: true` globalmente.
 
-O health check executa apenas `--version`. A autenticação não é inferida a partir desse comando: enquanto não existir uma checagem segura sem consumo de créditos, o estado é `unknown`.
+O health check executa apenas `--version` e `exec --help`, ambos sem prompt. A autenticação não é inferida a partir desse comando: enquanto não existir uma checagem segura sem consumo de créditos, o estado é `unknown`.
 
 `GET /api/providers` informa `resolvedExecutable`, `available`, `version`, `authenticationStatus`, `lastCheckAt`, `latencyMs` e `error`, sem expor secrets.
 
@@ -128,3 +128,14 @@ Erros de configuração, argumentos inválidos, modelo ausente, schema JSON inv�
 `CODEX_TIMEOUT_MS` (default `120000`) limita a duração total do processo Codex. Um processo pode ficar silencioso por dezenas de segundos sem ser stalled, porque o adapter envia `input.onHeartbeat()` periodicamente enquanto o child continua vivo. stdout/stderr geram progress events; heartbeat de liveness não gera progresso falso.
 
 Os logs operacionais distinguem `provider.heartbeat`, `watchdog.stalled`, `provider.timeout` e `provider.cancelled`.
+
+
+## Saída JSONL do `codex exec --json`
+
+O stdout do modo `--json` é um stream de eventos JSONL, não um `ReviewResult` único. O adapter processa cada linha isoladamente, ignora linhas vazias ou inválidas e preserva os eventos JSON válidos para diagnóstico. A resposta é extraída dos eventos `item.completed` cujo `item.type` é `agent_message`; entre várias mensagens, usa a última cujo conteúdo passa pela validação do review.
+
+O texto da mensagem é tentado como JSON direto e, em seguida, como JSON envolvido integralmente por um code fence ` ```json ... ``` `. O resultado normalizado deve conter `status` `APPROVED` ou `NEEDS_FIX`, `summary` string e `issues` válidos. A palavra `APPROVED` isolada nunca é aceita.
+
+Eventos `turn.completed` indicam conclusão normal e seu `usage` é preservado somente quando fornecido pelo provider. `turn.failed` ou `error` sem conclusão válida produzem `provider_error`; mensagens intermediárias de erro não invalidam um turno que posteriormente concluiu com review válido. O raw response registra eventos, mensagem final, conclusão do turn e usage sem imprimir raciocínio interno.
+
+Quando o reviewer retorna `APPROVED`, a task termina como `approved`. Quando retorna `NEEDS_FIX`, termina como `needs_fix` e a UI exibe o resumo e as issues, sem executar fixer automático.
