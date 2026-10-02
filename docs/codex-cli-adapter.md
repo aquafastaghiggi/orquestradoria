@@ -90,3 +90,28 @@ No Windows, a ordem no PATH é `codex.cmd`, `codex.exe`, `codex`. O wrapper `.ps
 O health check executa apenas `--version`. A autenticação não é inferida a partir desse comando: enquanto não existir uma checagem segura sem consumo de créditos, o estado é `unknown`.
 
 `GET /api/providers` informa `resolvedExecutable`, `available`, `version`, `authenticationStatus`, `lastCheckAt`, `latencyMs` e `error`, sem expor secrets.
+
+## Compatibilidade com codex-cli 0.160.0
+
+A compatibilidade testada usa `codex-cli 0.160.0`. Antes de uma execução, o adapter executa apenas comandos de diagnóstico sem prompt:
+
+- `codex --version`;
+- `codex exec --help`.
+
+A partir do help, registra `supportedExecFlags` e `unsupportedConfiguredFlags`. As capabilities verificadas incluem `--json`, `--sandbox` e `--model`. O conjunto padrão seguro é:
+
+```text
+exec --json --sandbox read-only
+```
+
+`--model` é acrescentado somente após a validação de suporte e a configuração do modelo.
+
+### CODEX_SAFE_ARGS
+
+`CODEX_SAFE_ARGS` pode substituir os argumentos seguros, mas toda flag iniciada por `--` precisa aparecer no output de `codex exec --help`. Uma flag desconhecida, como `--ask-for-approval` no codex-cli 0.160.0, bloqueia a execução antes de iniciar um prompt e produz:
+
+```text
+Configuration error: Unsupported Codex CLI argument: --ask-for-approval
+```
+
+Erros de configuração, argumentos inválidos, modelo ausente, schema JSON inválido, orçamento excedido e cancelamento não são retryable. Apenas falhas transitórias de provider e timeout entram na política de retry.
