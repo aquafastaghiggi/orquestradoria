@@ -1,0 +1,12 @@
+import {spawn as nodeSpawn, type ChildProcessWithoutNullStreams} from 'node:child_process';
+
+export interface CommandInvocation {executable:string;args:string[];cwd?:string;env?:NodeJS.ProcessEnv;platform?:NodeJS.Platform;}
+export type CliSpawnOptions={cwd?:string;env?:NodeJS.ProcessEnv;stdio:['pipe','pipe','pipe'];shell?:boolean};
+export type CliSpawn=(command:string,args:string[],options:CliSpawnOptions)=>ChildProcessWithoutNullStreams;
+
+const windowsMeta=/([&|<>^()!])/g;
+function quoteWindowsArg(value:string){const escaped=value.replace(/(\\*)"/g,'$1$1\\"').replace(/(\\+)$/g,'$1$1');return `"${escaped.replace(windowsMeta,'^$1')}"`;}
+export function buildWindowsCmdInvocation(invocation:CommandInvocation){const commandLine=[invocation.executable,...invocation.args].map(quoteWindowsArg).join(' ');return{command:'cmd.exe',args:['/d','/s','/c',commandLine],shell:false as const};}
+export function createCliSpawn(platform:NodeJS.Platform=process.platform):CliSpawn{return(command,args,options)=>{if(platform==='win32'&&command.toLowerCase().endsWith('.cmd')){const wrapped=buildWindowsCmdInvocation({executable:command,args,platform});return nodeSpawn(wrapped.command,wrapped.args,{...options,shell:false});}return nodeSpawn(command,args,{...options,shell:false});};}
+export interface CliProcessResult{code:number|null;stdout:string;stderr:string;}
+export function runCliProcess(invocation:CommandInvocation,spawn:CliSpawn=createCliSpawn(invocation.platform),signal?:AbortSignal):Promise<CliProcessResult>{return new Promise((resolve,reject)=>{const wrapper=invocation.platform==='win32'&&invocation.executable.toLowerCase().endsWith('.cmd');const command=wrapper?'cmd.exe':invocation.executable;const args=wrapper?buildWindowsCmdInvocation(invocation).args:invocation.args;let stdout='',stderr='',settled=false;let child:ChildProcessWithoutNullStreams;try{child=spawn(command,args,{cwd:invocation.cwd,env:invocation.env,stdio:['pipe','pipe','pipe'],shell:false});}catch(error){reject(error);return;}const finish=(callback:()=>void)=>{if(settled)return;settled=true;callback();};child.stdout.on('data',(chunk:Buffer)=>stdout+=chunk.toString());child.stderr.on('data',(chunk:Buffer)=>stderr+=chunk.toString());child.on('error',error=>finish(()=>reject(error)));child.on('close',code=>finish(()=>resolve({code,stdout,stderr})));signal?.addEventListener('abort',()=>{child.kill('SIGTERM');finish(()=>reject(Object.assign(new Error('CLI process cancelled'),{kind:'cancelled'})));},{once:true});child.stdin.end();});}

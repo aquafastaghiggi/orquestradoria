@@ -6,4 +6,7 @@ export class ReviewerProviderRouter extends RoleProviderRouter {constructor(mock
 export {CodexCliAdapter,resolveExecutable} from './codex.js';
 export type {AuthenticationStatus,CodexCliConfig,CodexReview,CodexProviderHealth,ResolvedExecutable,ResolveExecutableOptions} from './codex.js';
 export {ClaudeCodeAdapter,resolveClaudeExecutable,validateClaudeDeveloperResult} from './claude.js';
-export type {ClaudeCodeConfig,ClaudeDeveloperResult,ClaudeProviderHealth,ClaudeResolvedExecutable,ClaudeResolveOptions} from './claude.js';
+export {buildClaudeArgs,classifyClaudeCliError} from './claude.js';
+export type {ClaudeArgsInput,ClaudeCodeConfig,ClaudeDeveloperResult,ClaudeProviderHealth,ClaudeResolvedExecutable,ClaudeResolveOptions} from './claude.js';
+export {buildWindowsCmdInvocation,createCliSpawn,runCliProcess} from './cli-process.js';
+export type {CliSpawn,CommandInvocation,CliProcessResult} from './cli-process.js';

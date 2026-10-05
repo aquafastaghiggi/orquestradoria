@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,magenta \"pnpm --filter @orchestrator/api dev\" \"pnpm --filter @orchestrator/web dev\"",
     "build": "pnpm -r build",
+    "doctor": "pnpm --filter @orchestrator/api doctor",
     "typecheck": "pnpm -r build && pnpm -r typecheck",
     "test": "pnpm -r build && pnpm --filter @orchestrator/api test",
     "lint": "pnpm -r lint",

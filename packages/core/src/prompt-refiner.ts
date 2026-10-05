@@ -1,0 +1,5 @@
+export interface PromptRefinement{objective:string;scope:string[];constraints:string[];acceptanceCriteria:string[];assumptions:string[];missingInformation:string[];}
+export interface PromptRefinerInput{request:string;workspaceName?:string;stack?:string;projectRules?:string[];}
+export interface PromptRefiner{ id:string; refine(input:PromptRefinerInput):Promise<PromptRefinement>; }
+export class MockPromptRefiner implements PromptRefiner{id='mock-prompt-refiner';async refine(input:PromptRefinerInput):Promise<PromptRefinement>{const request=input.request.trim();return{objective:request,scope:[],constraints:(input.projectRules||[]).slice(0,5),acceptanceCriteria:[`The requested outcome is implemented and verified: ${request}`],assumptions:input.workspaceName?[`Work is limited to workspace ${input.workspaceName}.`]:[],missingInformation:request?[]:['Describe the desired outcome.']};}}
+export function createPromptRefiner(config: {provider?:string}={}):PromptRefiner{return config.provider&&config.provider!=='mock'?new MockPromptRefiner():new MockPromptRefiner();}
