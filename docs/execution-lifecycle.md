@@ -9,6 +9,7 @@
 7. O último stage concluído vira `lastSuccessfulStage`; o resume continua depois dele.
 8. Artifacts, eventos e audit logs são persistidos por stage; o manifest do contexto registra tamanho, sections e arquivos selecionados.
 9. Antes do reviewer, o Orquestrador monta o `ReviewBundle`; o Codex usa o bundle como `cwd` e o bundle é limpo ao concluir, cancelar ou falhar.
+10. `NEEDS_FIX` é resultado de workflow: quando habilitado no snapshot, inicia ciclos limitados `developer -> tester -> reviewer`, preservando o planner e separando ciclos de correções de retries técnicos.
 
 ## Rastreabilidade
 

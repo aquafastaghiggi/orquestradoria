@@ -1,12 +1,12 @@
 export type WorkspaceType = 'local'|'git'|'ssh';export type WorkspaceStatus = 'active'|'paused'|'archived';
-export type TaskStatus = 'pending'|'analyzing'|'planning'|'implementing'|'testing'|'reviewing'|'needs_fix'|'approved'|'human_review_required'|'cancelled'|'failed'|'stalled';
+export type TaskStatus = 'pending'|'analyzing'|'planning'|'implementing'|'testing'|'reviewing'|'needs_fix'|'needs_manual_review'|'approved'|'human_review_required'|'cancelled'|'failed'|'stalled';
 export type ExecutionStatus = 'queued'|'running'|'completed'|'failed'|'cancelled'|'timed_out'|'stalled';export type AgentRole='analyst'|'planner'|'developer'|'tester'|'reviewer';
 export type FailureKind='provider_error'|'timeout'|'validation_error'|'configuration_error'|'cli_invocation_error'|'authentication_error'|'review_rejected'|'cancelled'|'budget_exceeded';export type ArtifactType='plan'|'implementation_summary'|'diff'|'review'|'test_report'|'log'|'generated_file'|'context_snapshot'|'workspace_baseline'|'context_manifest';
 export interface Workspace{id:string;name:string;type:WorkspaceType;location:string;branch?:string;status:WorkspaceStatus;taskBudgetUsd:number;monthlyBudgetUsd:number;createdAt:string;updatedAt:string;}
 export interface AgentConfig{role:AgentRole;provider:string;model:string;timeoutSeconds:number;maxRetries:number;maxIterations:number;budgetUsd:number;tokenBudget:number;fallbackProviders:string[];enabled:boolean;}
 export interface SecurityPolicy{denyGitPush:boolean;denyDeploy:boolean;denyDestructiveCommands:boolean;denySecrets:boolean;timeoutMs:number;maxIterations:number;requireHumanApproval:boolean;}
 export interface HumanApprovalGates{beforeImplementation:boolean;beforeCommit:boolean;beforeMerge:boolean;beforeDeploy:boolean;beforeDatabaseChange:boolean;}
-export interface Task{id:string;workspaceId:string;title:string;description:string;pipeline:AgentRole[];status:TaskStatus;currentStage?:AgentRole;lastSuccessfulStage?:AgentRole;resumable:boolean;taskBudgetUsd:number;tokenBudget:number;configSnapshot:string;createdAt:string;updatedAt:string;}
+export interface Task{id:string;workspaceId:string;title:string;description:string;pipeline:AgentRole[];status:TaskStatus;currentStage?:AgentRole;lastSuccessfulStage?:AgentRole;resumable:boolean;taskBudgetUsd:number;tokenBudget:number;configSnapshot:string;createdAt:string;updatedAt:string;fixCycle?:number;maxFixCycles?:number;autoFixEnabled?:boolean;}
 export interface ProviderCapabilities{streaming:boolean;cancel:boolean;usageReporting:boolean;modelSelection:boolean;toolUse:boolean;filesystemAccess:boolean;sessionResume:boolean;structuredOutput:boolean;}
 export interface ModelCatalog{providerId:string;modelId:string;displayName:string;capabilities:ProviderCapabilities;contextWindow:number;inputCostPerMillion:number;outputCostPerMillion:number;enabled:boolean;metadata:Record<string,unknown>;}
 export type AuthenticationStatus='authenticated'|'unauthenticated'|'unknown';export interface ProviderHealth{providerId:string;available:boolean;authenticated:boolean;authenticationStatus:AuthenticationStatus;version?:string;resolvedExecutable?:string;supportedExecFlags?:string[];unsupportedConfiguredFlags?:string[];lastCheckAt?:string;latencyMs?:number;error?:string;}
@@ -29,6 +29,6 @@ export const DEFAULT_PIPELINE:AgentRole[]=['planner','developer','tester','revie
 export const DEFAULT_POLICY:SecurityPolicy={denyGitPush:true,denyDeploy:true,denyDestructiveCommands:true,denySecrets:true,timeoutMs:120000,maxIterations:3,requireHumanApproval:false};
 export const DEFAULT_GATES:HumanApprovalGates={beforeImplementation:false,beforeCommit:false,beforeMerge:false,beforeDeploy:true,beforeDatabaseChange:true};
 export const DEFAULT_RETENTION:RetentionConfig={eventsDays:30,logsDays:30,artifactsDays:90,rawProviderResponsesDays:14};
-export const TASK_STATUSES:TaskStatus[]=['pending','analyzing','planning','implementing','testing','reviewing','needs_fix','approved','human_review_required','cancelled','failed','stalled'];
+export const TASK_STATUSES:TaskStatus[]=['pending','analyzing','planning','implementing','testing','reviewing','needs_fix','needs_manual_review','approved','human_review_required','cancelled','failed','stalled'];
 
 export * from './sse.js';
