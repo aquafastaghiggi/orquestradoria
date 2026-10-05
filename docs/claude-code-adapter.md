@@ -64,3 +64,11 @@ Ainda não há git diff/baseline, artifacts de diff, filesChanged/testsRun avan�
 ## Rastreamento de alterações — Fase 2
 
 O Claude Code não calcula nem persiste diff. Antes do developer, o Orchestrator captura o baseline por meio de `LocalWorkspaceTransport`; depois, captura o estado final, calcula `WorkspaceChangeSet` e gera artifacts `workspace_baseline`, `implementation_summary` e `diff`. `filesChanged` do provider é validado contra os caminhos reais e divergências geram warning/audit, sem falhar automaticamente a task.
+
+## Transporte seguro do prompt
+
+O prompt completo nunca é colocado nos argumentos do processo. O adapter passa apenas flags estruturais confirmadas pelo help (`-p`/`--print` e `--model <CLAUDE_MODEL>`) e envia task, descrição e contexto por `stdin`. Isso evita que `|`, `&`, `>`, `<`, aspas ou JSON sejam interpretados pelo `cmd.exe` quando o executável resolvido é `claude.cmd`.
+
+A mesma estratégia é usada em Linux/macOS. O wrapper `.cmd` continua sendo iniciado com `shell=true` quando necessário, mas nenhuma informação da task é interpolada na linha de comando.
+
+Falhas determinísticas de invocação recebem `cli_invocation_error` (e configurações locais inválidas recebem `configuration_error`), tipos que não entram no retry automático. Falhas transitórias continuam como `provider_error` e podem seguir a política de retry.
