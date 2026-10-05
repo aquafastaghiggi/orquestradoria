@@ -22,3 +22,7 @@ Na criação da task, `agentConfigs` é congelado no `configSnapshot`. Com `REVI
 ## Liveness do provider
 
 O heartbeat do provider é independente de output. Adapters com processo filho ativo enviam heartbeats periódicos mesmo quando stdout/stderr está silencioso. O watchdog usa `PROVIDER_STALL_TIMEOUT_MS` (30s por padrão), enquanto `CODEX_TIMEOUT_MS` (120s por padrão) permanece o limite total da execução. Assim, um modelo em processamento silencioso continua `running`; ausência real de heartbeat produz `stalled`, e excesso de duração total produz `timeout`.
+
+## Baseline do developer
+
+Quando o pipeline contém `developer`, o Orchestrator captura baseline antes de iniciar o stage. Ao completar o developer, captura o estado final, calcula o delta e persiste artifacts de baseline, resumo e diff. O mecanismo pertence ao workspace layer e é independente de Claude, Codex ou qualquer outro provider.

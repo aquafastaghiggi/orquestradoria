@@ -60,3 +60,7 @@ O `RoleProviderRouter` seleciona provider por `AgentRole`. Nesta fase, o padrão
 ## Limitações desta fase
 
 Ainda não há git diff/baseline, artifacts de diff, filesChanged/testsRun avançados na UI, loop `NEEDS_FIX`, integração Claude+Codex como fluxo de produção, deploy, worktrees ou SSH. A autenticação é reportada como desconhecida quando não pode ser confirmada por comandos seguros.
+
+## Rastreamento de alterações — Fase 2
+
+O Claude Code não calcula nem persiste diff. Antes do developer, o Orchestrator captura o baseline por meio de `LocalWorkspaceTransport`; depois, captura o estado final, calcula `WorkspaceChangeSet` e gera artifacts `workspace_baseline`, `implementation_summary` e `diff`. `filesChanged` do provider é validado contra os caminhos reais e divergências geram warning/audit, sem falhar automaticamente a task.
