@@ -6,6 +6,8 @@ O sistema é um monorepo simples com separação entre aplicação, domínio e a
 
 `Task -> PipelineRunner -> ProviderAdapter -> Execution + DomainEvent -> SSE -> Web`
 
+Antes do adapter, o runner cria um `StageContext` específico com `ContextBuilder`. O reviewer recebe diff e arquivos alterados como fonte principal; raw responses, logs e audit permanecem somente no storage de auditoria.
+
 O `PipelineRunner` conhece apenas o contrato `ProviderAdapter`. Portanto, trocar MockAdapter por um provider futuro não altera o core.
 
 ## Proteções

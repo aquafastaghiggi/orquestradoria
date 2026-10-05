@@ -4,6 +4,8 @@
 
 Use `pnpm --filter @orchestrator/api doctor` to verify the local runtime and CLI providers without executing a real provider prompt. Copy `.env.example` to configure provider selection.
 
+Para entender a redução de contexto por stage, consulte [docs/context-selection.md](docs/context-selection.md).
+
 AI Orchestrator é um workspace manager local para coordenar tarefas de software através de pipelines de agentes, com observabilidade e providers desacoplados.
 
 ## Estado atual
