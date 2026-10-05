@@ -28,6 +28,15 @@ $env:PROMPT_REFINER_ALLOW_FALLBACK="true"
 
 A chave não deve ser commitada nem enviada ao chat. Consulte [docs/prompt-refiner.md](docs/prompt-refiner.md) para o contrato, fallback e segurança.
 
+Para usar a sessão local do Claude Code CLI somente no Refiner, sem API key e sem alterar o Developer:
+
+```powershell
+$env:PROMPT_REFINER_PROVIDER="claude-code"
+$env:PROMPT_REFINER_MODEL="haiku"
+$env:DEVELOPER_PROVIDER="claude-code"
+$env:CLAUDE_MODEL="sonnet"
+```
+
 ## Instalação e execução
 
 Requisitos: **Node.js 22 LTS** e pnpm 9+. Node 24 não é suportado nesta etapa por causa da compatibilidade do `better-sqlite3`.
