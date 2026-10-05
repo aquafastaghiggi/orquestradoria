@@ -72,3 +72,17 @@ O prompt completo nunca é colocado nos argumentos do processo. O adapter passa 
 A mesma estratégia é usada em Linux/macOS. O wrapper `.cmd` continua sendo iniciado com `shell=true` quando necessário, mas nenhuma informação da task é interpolada na linha de comando.
 
 Falhas determinísticas de invocação recebem `cli_invocation_error` (e configurações locais inválidas recebem `configuration_error`), tipos que não entram no retry automático. Falhas transitórias continuam como `provider_error` e podem seguir a política de retry.
+
+## Tools e permissões do Developer — Fase 3
+
+O Developer recebe defaults seguros quando a CLI confirma as flags pelo `claude --help`:
+
+- leitura e descoberta: `Read`, `Glob`, `Grep`;
+- edição: `Edit`, `Write`;
+- Bash restrito: `git status`, `git diff`, `git log`, `git rev-parse`, testes/builds com `pnpm`, `npm`, `node` e `php -l`.
+
+A lista de bloqueios inclui `git commit`, `git push`, `git reset`, `git clean`, `git checkout`, `git restore`, `git stash`, `rm`, `del`, `Remove-Item`, deploy, `ssh` e `scp`. O Orchestrator envia `--allowedTools` e `--disallowedTools` somente se cada flag aparecer no help instalado. Não usamos `--dangerously-skip-permissions` nem `bypassPermissions`.
+
+`CLAUDE_ALLOWED_TOOLS`, `CLAUDE_DISALLOWED_TOOLS`, `CLAUDE_PERMISSION_MODE` e `CLAUDE_MAX_TURNS` permitem configuração controlada. O limite padrão é `15` turns. Se a CLI confirmar `dontAsk` no help e nenhum modo for configurado, esse modo é usado; caso contrário, nenhum valor é inventado.
+
+O `cwd` continua sendo o workspace registrado e não há `--add-dir`. O prompt instrui explicitamente `Operate only inside the registered workspace`. Se o Developer retornar `COMPLETED` sem mudanças reais, o Orchestrator registra `developer.completed_without_changes` sem transformar isso automaticamente em falha.
