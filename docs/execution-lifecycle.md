@@ -8,6 +8,7 @@
 6. O watchdog marca a execution como `stalled` quando o heartbeat excede o limite.
 7. O último stage concluído vira `lastSuccessfulStage`; o resume continua depois dele.
 8. Artifacts, eventos e audit logs são persistidos por stage; o manifest do contexto registra tamanho, sections e arquivos selecionados.
+9. Antes do reviewer, o Orquestrador monta o `ReviewBundle`; o Codex usa o bundle como `cwd` e o bundle é limpo ao concluir, cancelar ou falhar.
 
 ## Rastreabilidade
 

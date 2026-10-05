@@ -13,7 +13,7 @@ test('reviewer context excludes raw provider and audit data while retaining diff
 
 test('large reviewer context preserves priority sections and reports truncation',()=>{
   const context=buildStageContext({task,role:'reviewer',workspaceContext:{id:'ws-1',type:'local',location:'C:\\workspace'},changedFiles:['src/a.ts','src/b.ts','src/c.ts'],diff:'x'.repeat(20000),artifacts:[artifact('implementation_summary','summary'),artifact('log','noise'.repeat(10000))],acceptanceCriteria:['Must remain safe'],maxChars:1200});
-  assert.equal(context.contextTruncated,true);assert.match(context.prompt,/TASK/);assert.match(context.prompt,/ACCEPTANCE CRITERIA/);assert.match(context.prompt,/CHANGED FILES/);assert.ok(context.manifest.omittedChars&&context.manifest.omittedChars>0);
+  assert.equal(context.contextTruncated,true);assert.match(context.prompt,/TASK/);assert.match(context.prompt,/ACCEPTANCE CRITERIA/);assert.match(context.prompt,/TASK CHANGESET/);assert.ok(context.manifest.omittedChars&&context.manifest.omittedChars>0);
 });
 
 test('developer receives planner summary without raw provider response',()=>{

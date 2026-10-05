@@ -2,6 +2,8 @@
 
 O `ContextBuilder` (`packages/core/src/context-builder.ts`) prepara um contexto independente do provider para cada stage. Adapters recebem o prompt já selecionado e não concatenam artifacts brutos quando `stageContext` está disponível.
 
+Para o Reviewer, o contexto também carrega `ReviewScope` e um `ReviewBundle`; alterações pré-existentes são explicitamente marcadas como fora do escopo.
+
 ## Regras por stage
 
 - Planner: task, critérios, regras e resumo do projeto.

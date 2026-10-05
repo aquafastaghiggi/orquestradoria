@@ -1,4 +1,4 @@
-import type {AgentRole,Artifact,ContextManifest,ExecutionContext,StageContext,Task} from '@orchestrator/shared';
+import type {AgentRole,Artifact,ContextManifest,ExecutionContext,ReviewBundle,ReviewScope,StageContext,Task} from '@orchestrator/shared';
 
 export interface ProjectContextSummary {language?:string;framework?:string;packageManager?:string;relevantPaths?:string[];testCommands?:string[];rules?:string[];}
 export interface StageContextOptions {
@@ -15,6 +15,8 @@ export interface StageContextOptions {
   diff?:string;
   tests?:string[];
   reviewIssues?:string[];
+  reviewScope?:ReviewScope;
+  reviewBundle?:ReviewBundle;
   maxChars?:number;
 }
 
@@ -63,12 +65,12 @@ export function buildStageContext(options:StageContextOptions):StageContext{
   } else if(options.role==='tester'){
     add('CHANGED FILES',list(changedFiles));add('IMPLEMENTATION SUMMARY',artifactText(selected.find(a=>a.type==='implementation_summary')||({content:''} as Artifact)));add('TEST COMMANDS',list(options.tests||options.projectSummary?.testCommands));
   } else if(options.role==='reviewer'){
-    add('CHANGED FILES',list(changedFiles));add('DIFF',selectedDiff.text);add('IMPLEMENTATION SUMMARY',artifactText(selected.find(a=>a.type==='implementation_summary')||({content:''} as Artifact)));add('TEST RESULTS',list(options.tests));
+    const scope=options.reviewScope;add('TASK CHANGESET',scope?`Added: ${scope.filesAdded.join(', ')||'none'}\nModified: ${scope.filesModified.join(', ')||'none'}\nDeleted: ${scope.filesDeleted.join(', ')||'none'}\nActual files changed: ${scope.actualFilesChanged.join(', ')||'none'}`:list(changedFiles));add('PRE-EXISTING WORKSPACE CHANGES',scope?`${scope.preExistingFiles.length} files existed before this task. These files are outside the scope of this review unless the task changed them.`:'No baseline metadata supplied.');add('DIFF',scope?.relevantDiff||selectedDiff.text);add('IMPLEMENTATION SUMMARY',artifactText(selected.find(a=>a.type==='implementation_summary')||({content:''} as Artifact)));add('TEST RESULTS',list(options.tests));add('REVIEW RULES','Review only task-attributed changes.\nPre-existing changes are not part of this review.\nDo not fail because unrelated files are dirty or untracked.\nUse actualFilesChanged as the authoritative task scope.\nReturn NEEDS_FIX only for issues introduced by this task.');
   }
   const raw=parts.join('');let prompt=raw;let truncated=selectedDiff.truncated;let omittedChars=selectedDiff.omittedChars;const filesOmitted=[...selectedDiff.omittedFiles];
   if(prompt.length>limit){const kept=prompt.slice(0,Math.max(0,limit-160));prompt=`${kept}\n\n[Context truncated at ${limit} characters. Omitted lower-priority sections.]`;truncated=true;omittedChars=(omittedChars||0)+raw.length-prompt.length;}
-  const manifest:ContextManifest={role:options.role,includedSections,excludedSections,filesIncluded:changedFiles.slice(0,changedFiles.length-filesOmitted.length),filesOmitted,charCount:prompt.length,truncated,omittedChars:omittedChars||undefined};
-  return {prompt,manifest,contextChars:prompt.length,contextSections:includedSections,contextTruncated:truncated,contextFilesIncluded:manifest.filesIncluded,contextFilesOmitted:filesOmitted};
+  const manifest:ContextManifest={role:options.role,includedSections,excludedSections,filesIncluded:options.reviewBundle?.filesIncluded||changedFiles.slice(0,changedFiles.length-filesOmitted.length),filesOmitted:options.reviewBundle?.filesOmitted||filesOmitted,charCount:prompt.length,truncated,omittedChars:omittedChars||undefined};
+  return {prompt,manifest,contextChars:prompt.length,contextSections:includedSections,contextTruncated:truncated,contextFilesIncluded:manifest.filesIncluded,contextFilesOmitted:filesOmitted,reviewBundle:options.reviewBundle};
 }
 
 export {DEFAULT_LIMITS};
