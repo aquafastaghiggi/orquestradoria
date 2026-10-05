@@ -1,3 +1,3 @@
 # Doctor
 
-Run `pnpm --filter @orchestrator/api doctor` (or `pnpm doctor` when exposed by the host) to inspect Node, pnpm, Git, SQLite configuration, Claude Code, Codex CLI, paths, versions, ports, and provider configuration. It never sends a model prompt and never prints secrets.
+Run `pnpm run doctor` for the general runtime check, or `pnpm run claude-doctor` for the Claude-only capability diagnostic. Workspace equivalents are `pnpm --filter @orchestrator/api run doctor` and `pnpm --filter @orchestrator/api run claude-doctor`. These commands only inspect CLI version/help and never send a model prompt or print secrets.
