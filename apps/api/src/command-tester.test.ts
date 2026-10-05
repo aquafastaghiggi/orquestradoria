@@ -1,0 +1,19 @@
+import assert from 'node:assert/strict';
+import {mkdtempSync,writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {PassThrough} from 'node:stream';
+import {test} from 'node:test';
+import {CommandTesterAdapter,detectProjectProfile,type TestCommand} from '@orchestrator/adapters';
+
+const base:any={task:{id:'tester-task',title:'test',description:'test',configSnapshot:{}},workspaceContext:{id:'w',type:'local',location:process.cwd()},projectRules:[],stage:'tester',previousArtifacts:[],constraints:{timeoutSeconds:1,tokenBudget:0,budgetUsd:0}};
+function fakeSpawn(exitCode:number,delay=0){return ((command:string,args:string[],options:any)=>{const stdout=new PassThrough() as any;const stderr=new PassThrough() as any;const listeners:Record<string,Function[]>={};const child:any={stdout,stderr,stdin:{end(){}},kill(){setTimeout(()=>listeners.close?.forEach(fn=>fn(exitCode)),0);},on(event:string,fn:Function){(listeners[event]??=[]).push(fn);return child;}};setTimeout(()=>{stdout.write('safe output');stdout.end();stderr.end();listeners.close?.forEach(fn=>fn(exitCode));},delay);return child;}) as any;}
+function command(id='test'):TestCommand{return{id,label:id,executable:'pnpm',args:[id],cwd:process.cwd(),timeoutMs:1000};}
+
+test('detects Node scripts and never uses task text as a command',()=>{const dir=mkdtempSync(join(tmpdir(),'orchestrator-profile-'));writeFileSync(join(dir,'package.json'),JSON.stringify({scripts:{test:'vitest',typecheck:'tsc --noEmit',build:'vite build'}}));writeFileSync(join(dir,'pnpm-lock.yaml'),'lockfileVersion: 9');const profile=detectProjectProfile({location:dir});assert.equal(profile.packageManager,'pnpm');assert.deepEqual(profile.commands.map(item=>item.args),[['run','typecheck'],['test'],['run','build']]);assert.equal(profile.commands.some(item=>JSON.stringify(item).includes('task')),false);});
+
+test('command tester reports pass, progress and heartbeat with a mocked child',async()=>{let heartbeats=0;let progress=0;const adapter=new CommandTesterAdapter({profile:{projectType:'node',packageManager:'pnpm',commands:[{...command(),timeoutMs:150}],notes:[]},timeoutMs:150,spawn:fakeSpawn(0,80),platform:'linux'});const result=await adapter.execute({...base,onHeartbeat:()=>heartbeats++,onProgress:()=>progress++});assert.equal((result.structuredResult as any).status,'PASSED');assert.equal((result.structuredResult as any).commands[0].status,'passed');assert.ok(progress>=1);assert.ok(heartbeats>=1);});
+
+test('command tester fails fast, truncates output and rejects unsafe generated commands',async()=>{const failed=new CommandTesterAdapter({profile:{projectType:'node',commands:[command('test'),command('build')],notes:[]},spawn:fakeSpawn(2),maxOutputChars:16});const result=await failed.execute(base);assert.equal((result.structuredResult as any).status,'FAILED');assert.equal((result.structuredResult as any).commands.length,1);const unsafe=new CommandTesterAdapter({profile:{projectType:'node',commands:[{...command(),args:['test; rm -rf .']}],notes:[]}});const blocked=await unsafe.execute(base);assert.equal((blocked.structuredResult as any).status,'BLOCKED');});
+
+test('command tester cancellation stops the mocked process and cleans up',async()=>{let killed=0;const spawn:any=(command:string,args:string[],options:any)=>{const child=fakeSpawn(0,500)(command,args,options);const kill=child.kill.bind(child);child.kill=(signal:string)=>{killed++;kill(signal);};return child;};const adapter=new CommandTesterAdapter({profile:{projectType:'node',commands:[command()],notes:[]},spawn});const controller=new AbortController();const pending=adapter.execute({...base,signal:controller.signal});setTimeout(()=>controller.abort(),10);const result=await pending;assert.equal((result.structuredResult as any).commands[0].status,'cancelled');assert.equal(killed,1);});

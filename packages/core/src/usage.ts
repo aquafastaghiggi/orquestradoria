@@ -1,0 +1,4 @@
+import type {Execution} from '@orchestrator/shared';
+export interface UsageSummary{tokenUsage:number;estimatedCost?:number;costKnown:boolean;providerCount:number;}
+export function aggregateUsage(executions:Pick<Execution,'tokenUsage'|'estimatedCost'|'provider'>[]):UsageSummary{const costs=executions.map(item=>item.estimatedCost).filter((value):value is number=>typeof value==='number'&&Number.isFinite(value));return{tokenUsage:executions.reduce((sum,item)=>sum+Number(item.tokenUsage||0),0),estimatedCost:costs.length?costs.reduce((sum,value)=>sum+value,0):undefined,costKnown:costs.length>0,providerCount:new Set(executions.map(item=>item.provider)).size};}
+export function formatEstimatedCost(value:number|undefined){return typeof value==='number'&&Number.isFinite(value)?`$${value.toFixed(4)}`:'N/A';}
