@@ -8,5 +8,5 @@ export type {AuthenticationStatus,CodexCliConfig,CodexReview,CodexProviderHealth
 export {ClaudeCodeAdapter,resolveClaudeExecutable,validateClaudeDeveloperResult} from './claude.js';
 export {buildClaudeArgs,classifyClaudeCliError} from './claude.js';
 export type {ClaudeArgsInput,ClaudeCodeConfig,ClaudeDeveloperResult,ClaudeProviderHealth,ClaudeResolvedExecutable,ClaudeResolveOptions} from './claude.js';
-export {buildWindowsCmdInvocation,createCliSpawn,runCliProcess} from './cli-process.js';
+export {buildWindowsCmdInvocation,createCliSpawn,prepareCliInvocation,runCliProcess} from './cli-process.js';
 export type {CliSpawn,CommandInvocation,CliProcessResult} from './cli-process.js';
