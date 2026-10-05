@@ -6,7 +6,7 @@ import {ClaudeCodeAdapter,CodexCliAdapter,MockAdapter,RoleProviderRouter,detectP
 import {BudgetGuard,ExecutionWatchdog,PipelineRunner,WorkspaceLockManager,resumeIndex,MockPromptRefiner,createPromptRefiner,buildStageContext} from '@orchestrator/core';
 import {createReviewBundle} from './review-bundle.js';
 import {DEFAULT_GATES,DEFAULT_PIPELINE,DEFAULT_POLICY,DEFAULT_RETENTION,makeSseEnvelope,type AgentRole,type ArtifactType,type FailureKind} from '@orchestrator/shared';
-import {configForRole,createTaskConfigSnapshot,toWorkspaceContext,validateWorkspaceLocation,type TaskConfigSnapshot} from './task-config.js';
+import {configForRole,createRuntimeConfig,createTaskConfigSnapshot,toWorkspaceContext,validateWorkspaceLocation,type TaskConfigSnapshot} from './task-config.js';
 import {calculateWorkspaceChangeSet,LocalWorkspaceTransport,type WorkspaceBaseline,type WorkspaceStateAfter} from '@orchestrator/workspace';
 
 const db=new Database(process.env.DB_PATH||'orchestrator.db');db.pragma('journal_mode = WAL');
@@ -27,6 +27,7 @@ function audit(action:string,metadata:Record<string,unknown>,taskId?:string,exec
 function emit(type:string,data:Record<string,unknown>,taskId?:string,executionId?:string){const event=makeSseEnvelope(type,data,taskId,executionId,now());const id=nanoid();db.prepare('INSERT INTO events VALUES (?,?,?,?,?,?)').run(id,type,taskId||null,executionId||null,JSON.stringify(event),event.timestamp);audit(type,data,taskId,executionId);for(const res of clients)res.write(`event: ${type}\ndata: ${JSON.stringify(event)}\n\n`);}
 function jsonTask(task:any){if(!task)return task;return{...task,pipeline:JSON.parse(task.pipeline),resumable:Boolean(task.resumable),fixCycle:Number(task.fixCycle||0),maxFixCycles:Number(task.maxFixCycles??2),autoFixEnabled:task.autoFixEnabled===undefined?true:Boolean(task.autoFixEnabled),configSnapshot:JSON.parse(task.configSnapshot)};}
 app.get('/health',(_,res)=>res.json({ok:true,service:'ai-orchestrator-api',runtime:'mock'}));
+app.get('/api/runtime-config',(_,res)=>res.json(createRuntimeConfig()));
 app.get('/events',(_,res)=>{res.setHeader('Content-Type','text/event-stream');res.setHeader('Cache-Control','no-cache');res.setHeader('Connection','keep-alive');res.flushHeaders();clients.add(res);res.write('event: connected\ndata: {}\n\n');res.on('close',()=>clients.delete(res));});
 app.get('/api/workspaces',(_,res)=>res.json(db.prepare('SELECT * FROM workspaces ORDER BY updatedAt DESC').all()));
 app.post('/api/workspaces',(req,res)=>{const id=nanoid(),t=now();const{name,type='local',location,branch='main',taskBudgetUsd=0,monthlyBudgetUsd=0}=req.body;if(!name||!location)return res.status(400).json({error:'name e location são obrigatórios'});db.prepare('INSERT INTO workspaces VALUES (?,?,?,?,?,?,?,?,?,?)').run(id,name,type,location,branch,'active',taskBudgetUsd,monthlyBudgetUsd,t,t);audit('workspace.created',{name,type});res.status(201).json(db.prepare('SELECT * FROM workspaces WHERE id=?').get(id));});
