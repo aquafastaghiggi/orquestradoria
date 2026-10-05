@@ -14,7 +14,7 @@ export interface PromptTemplate{id:string;name:string;version:number;template:st
 export interface RetentionConfig{eventsDays:number;logsDays:number;artifactsDays:number;rawProviderResponsesDays:number;}
 export interface ContextManifest{role:AgentRole;includedSections:string[];excludedSections:string[];filesIncluded:string[];filesOmitted:string[];charCount:number;truncated:boolean;omittedChars?:number;}
 export interface ReviewScope{taskId:string;filesAdded:string[];filesModified:string[];filesDeleted:string[];actualFilesChanged:string[];preExistingFiles:string[];relevantDiff:string;}
-export interface ReviewBundle{location:string;scope:ReviewScope;filesIncluded:string[];filesOmitted:string[];bundleSizeChars:number;bundleSizeBytes:number;manifestPath:string;reviewRequestPath:string;}
+export interface ReviewBundle{location:string;scope:ReviewScope;filesIncluded:string[];filesOmitted:string[];bundleSizeChars:number;bundleSizeBytes:number;manifestPath:string;reviewRequestPath:string;cleanup?:()=>void;}
 export interface StageContext{prompt:string;manifest:ContextManifest;contextChars:number;contextSections:string[];contextTruncated:boolean;contextFilesIncluded:string[];contextFilesOmitted:string[];reviewBundle?:ReviewBundle;}
 export interface ExecutionContext{task:Task;workspaceContext:{id:string;type:WorkspaceType;location:string;branch?:string};projectRules:string[];stage:AgentRole;previousArtifacts:Artifact[];constraints:{timeoutSeconds:number;tokenBudget:number;budgetUsd:number};expectedOutputSchema?:Record<string,unknown>;stageContext?:StageContext;reviewBundle?:ReviewBundle;}
 export interface ProgressEvent{message:string;percent?:number;timestamp:string;}
