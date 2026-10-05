@@ -12,7 +12,21 @@ AI Orchestrator é um workspace manager local para coordenar tarefas de software
 
 O MVP inclui Workspaces local/Git/SSH (modelo preparado), tarefas, pipeline configurável, MockAdapter, Codex CLI reviewer opcional, SQLite, eventos SSE, cancelamento estrutural, timeout/policies, custos e tokens simulados e uma interface operacional dark-first.
 
-> Nenhum provider real, token ou API paga é integrado nesta fase.
+> O pipeline continua mock-first. O Prompt Refiner pode usar opcionalmente uma API configurada pelo usuário; nenhuma chamada externa é feita por testes ou pelo doctor.
+
+## Prompt Refiner Anthropic
+
+O Refiner Anthropic é separado do Claude Code CLI do Developer. Para habilitá-lo no PowerShell:
+
+```powershell
+$env:PROMPT_REFINER_PROVIDER="anthropic"
+$env:PROMPT_REFINER_MODEL="claude-haiku-4-5-20251001"
+$env:PROMPT_REFINER_API_KEY="YOUR_KEY"
+$env:PROMPT_REFINER_BASE_URL="https://api.anthropic.com"
+$env:PROMPT_REFINER_ALLOW_FALLBACK="true"
+```
+
+A chave não deve ser commitada nem enviada ao chat. Consulte [docs/prompt-refiner.md](docs/prompt-refiner.md) para o contrato, fallback e segurança.
 
 ## Instalação e execução
 

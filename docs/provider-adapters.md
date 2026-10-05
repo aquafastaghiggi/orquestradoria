@@ -9,3 +9,7 @@ Cada adapter declara `ProviderCapabilities`. O contrato de execução recebe `Ex
 ## Health e catálogo
 
 Adapters futuros devem alimentar ProviderHealth e ModelCatalog sem acoplar o core a SDKs. A autenticação é reportada como estado, não inferida a partir da execução.
+
+## Prompt Refiner Anthropic
+
+O Prompt Refiner possui um provider nativo opcional para a Anthropic Messages API, separado do `ClaudeCodeAdapter` usado pelo Developer. Configure `PROMPT_REFINER_PROVIDER=anthropic`, `PROMPT_REFINER_MODEL=claude-haiku-4-5-20251001`, `PROMPT_REFINER_API_KEY` e, opcionalmente, `PROMPT_REFINER_BASE_URL=https://api.anthropic.com`. O provider usa `POST /v1/messages`, `x-api-key` e `anthropic-version: 2023-06-01`, sem tools ou extended thinking. O doctor somente verifica configuração; não faz chamada paga.
