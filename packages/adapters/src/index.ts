@@ -11,5 +11,5 @@ export {buildClaudeArgs,classifyClaudeCliError,parseClaudeCapabilities,validateC
 export type {ClaudeArgsInput,ClaudeCapabilities,ClaudeCodeConfig,ClaudeDeveloperResult,ClaudeProviderHealth,ClaudeResolvedExecutable,ClaudeResolveOptions} from './claude.js';
 export {buildWindowsCmdInvocation,createCliSpawn,prepareCliInvocation,resolveWindowsCmdTarget,runCliProcess} from './cli-process.js';
 export type {CliSpawn,CommandInvocation,CliProcessResult} from './cli-process.js';
-export {CommandTesterAdapter,detectProjectProfile} from './tester.js';
+export {CommandTesterAdapter,detectProjectProfile,normalizeAssignedFiles} from './tester.js';
 export type {CommandTesterConfig,TesterResult,TesterCommandResult,ProjectTestProfile,TestCommand} from './tester.js';
