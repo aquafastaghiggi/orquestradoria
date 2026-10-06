@@ -6,7 +6,11 @@ O sistema é um monorepo simples com separação entre aplicação, domínio e a
 
 `Task -> PipelineRunner -> ProviderAdapter -> Execution + DomainEvent -> SSE -> Web`
 
+Antes do adapter, o runner cria um `StageContext` específico com `ContextBuilder`. O reviewer recebe diff e arquivos alterados como fonte principal; raw responses, logs e audit permanecem somente no storage de auditoria.
+
 O `PipelineRunner` conhece apenas o contrato `ProviderAdapter`. Portanto, trocar MockAdapter por um provider futuro não altera o core.
+
+O registry de providers/modelos é compartilhado entre API e UI. Defaults globais, overrides por workspace e snapshots de task seguem precedência explícita; health é cacheado e exposto por REST/SSE. Providers reais indisponíveis geram erro de configuração controlado, sem fallback silencioso para Mock.
 
 ## Proteções
 
@@ -23,3 +27,10 @@ Executions preservam providerSessionId, conversationId, resumeToken e parentExec
 ## Migração compatível
 
 O boot aplica `ensureColumn` para acrescentar colunas de execution em bancos MVP existentes e cria as novas tabelas de catálogo, health, templates e retention com `CREATE TABLE IF NOT EXISTS`. Isso mantém o upgrade local sem provider ou migration externa.
+
+Project Context é analisado de forma determinística e read-only por `packages/workspace`, persistido em `workspace_contexts` e exposto por REST/SSE. Ao criar uma task, o snapshot é congelado em `tasks`; `packages/core` renderiza uma visão role-selective e segura no `ContextBuilder`, e cada execution registra hash, versão, status, commit, tamanho e texto renderizado. Reviewer mantém diff, arquivos efetivamente alterados, tester report e ReviewBundle como fontes separadas.
+# Task execution isolation
+
+Execution is isolated in a local Git worktree when the workspace supports Git. The persisted task environment is the source of truth for the execution path and lifecycle. The final Apply or Discard action is explicit and remains local; neither action pushes to a remote repository or deploys changes.
+
+Repository inspection distinguishes non-Git directories from unborn Git repositories. Worktree creation requires a committed base; preparation errors are converted into a resumable `needs_manual_review` task and handled without an API process crash.

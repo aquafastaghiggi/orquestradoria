@@ -139,3 +139,6 @@ O texto da mensagem é tentado como JSON direto e, em seguida, como JSON envolvi
 Eventos `turn.completed` indicam conclusão normal e seu `usage` é preservado somente quando fornecido pelo provider. `turn.failed` ou `error` sem conclusão válida produzem `provider_error`; mensagens intermediárias de erro não invalidam um turno que posteriormente concluiu com review válido. O raw response registra eventos, mensagem final, conclusão do turn e usage sem imprimir raciocínio interno.
 
 Quando o reviewer retorna `APPROVED`, a task termina como `approved`. Quando retorna `NEEDS_FIX`, termina como `needs_fix` e a UI exibe o resumo e as issues, sem executar fixer automático.
+## Reviewer task-scoped
+
+O reviewer recebe um `ReviewScope` baseado no baseline/change-set da task e, quando disponível, executa em um `ReviewBundle` temporário. O bundle contém apenas o diff, metadata, resultados e snapshots selecionados; alterações dirty/untracked pré-existentes do workspace não são critério de reprovação. O diretório é somente para leitura conceitual do reviewer e é removido ao fim da execução.
