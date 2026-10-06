@@ -52,6 +52,10 @@ export function providerLabel(provider?: string) {
 }
 
 export function shortTaskDescription(task: { description?: string; summary?: string; objective?: string; structuredResult?: any }) {
-  const value = task.summary || task.objective || task.description || 'Sem descrição disponível.';
-  return value.replace(/^#\s*(Summary|Objective|Context|Scope|Constraints)[:\s]*/i, '').replace(/\s+/g, ' ').trim();
+  const raw = [task.summary, task.objective, task.structuredResult?.summary, task.structuredResult?.objective, task.description]
+    .find((value): value is string => typeof value === 'string' && value.trim().length > 0) || 'Sem descrição disponível.';
+  const section = (text: string, name: 'Summary' | 'Objective') =>
+    text.match(new RegExp(`(?:^|\\n)\\s*#{1,6}\\s*${name}\\b\\s*:?[ \\t]*([\\s\\S]*?)(?=\\n\\s*#{1,6}\\s+|$)`, 'im'))?.[1]?.trim() || '';
+  const structured = section(raw, 'Summary') || section(raw, 'Objective') || raw;
+  return structured.replace(/^#{1,6}\s*/gm, '').replace(/[\\*_~`]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 180).trimEnd();
 }
