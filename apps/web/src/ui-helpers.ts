@@ -31,6 +31,20 @@ export function humanizeErrorCode(code?: string, fallback?: string) {
   return (code && errorLabels[code]) || fallback || 'Ocorreu um erro ao processar a solicitação.';
 }
 
+export function humanizeWarning(warning?: string, code?: string) {
+  if (!warning && !code) return '';
+  if (code === 'base_branch_missing' || /configured branch .* was not found; using/i.test(warning || '')) {
+    const match = warning?.match(/configured branch ['"]?([^'"]+)['"]? was not found; using ['"]?([^'".]+)['"]?/i);
+    return match
+      ? `A branch configurada '${match[1]}' não foi encontrada. Utilizando '${match[2]}'.`
+      : 'A branch configurada não foi encontrada. Utilizando a branch efetiva do repositório.';
+  }
+  if (/main workspace has uncommitted changes/i.test(warning || '')) return 'O workspace principal possui alterações locais não commitadas.';
+  if (/git isolation unavailable/i.test(warning || '')) return 'O isolamento Git não está disponível para este workspace.';
+  if (/repository has no initial commit/i.test(warning || '')) return 'O repositório ainda não possui um commit inicial.';
+  return warning || 'Há um aviso operacional nesta task.';
+}
+
 export function humanizeEventType(type?: string) {
   const labels: Record<string, string> = {
     'task.created': 'Task criada', 'task.started': 'Task iniciada', 'task.resumed': 'Task retomada',

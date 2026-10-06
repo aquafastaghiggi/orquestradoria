@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { shortTaskDescription } from '../../web/src/ui-helpers.js';
+import { humanizeWarning, shortTaskDescription } from '../../web/src/ui-helpers.js';
 
 test('shortTaskDescription extracts Summary from structured markdown', () => {
   assert.equal(
@@ -17,5 +17,12 @@ test('shortTaskDescription falls back to Objective and removes markdown', () => 
       description: '# Task\n## Objective\n***Validate the worktree*** without exposing raw headings.',
     }),
     'Validate the worktree without exposing raw headings.',
+  );
+});
+
+test('humanizeWarning translates configured branch fallback', () => {
+  assert.equal(
+    humanizeWarning('Configured branch main was not found; using master.'),
+    "A branch configurada 'main' não foi encontrada. Utilizando 'master'.",
   );
 });
