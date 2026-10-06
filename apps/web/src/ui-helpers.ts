@@ -5,6 +5,7 @@ export const statusLabels: Record<string, string> = {
   running: 'Em execução', approved_waiting_action: 'Aprovada · aguardando sua ação',
   failed_preserved: 'Falhou · ambiente preservado', manual_review_preserved: 'Revisão manual necessária',
   apply_conflict: 'Conflito ao aplicar', preparation_failed: 'Preparação bloqueada', applied: 'Aplicada', discarded: 'Descartada',
+  active: 'Ativo', inactive: 'Inativo', healthy: 'Disponível', unavailable: 'Indisponível',
 };
 
 const errorLabels: Record<string, string> = {

@@ -7,7 +7,7 @@ Transform the user's informal request into a precise implementation specificatio
 
 Do not invent frameworks, files, database tables, APIs, credentials, deployment requirements, dependencies, infrastructure, or business rules unless explicitly provided in the request or trusted workspace context.
 
-Return ONLY valid JSON with these fields: title, summary, objective, context, scope, constraints, acceptanceCriteria, validation, outOfScope, warnings, needsClarification, clarifyingQuestions. Use arrays for list fields and a boolean for needsClarification. Do not use markdown fences. Do not return finalPrompt; the orchestrator assembles it deterministically.`;
+Return ONLY valid JSON with these fields: title, summary, objective, context, scope, constraints, acceptanceCriteria, validation, outOfScope, warnings, needsClarification, clarifyingQuestions. Return human-readable content in Brazilian Portuguese (pt-BR), while preserving technical names, commands, paths and JSON field names. Use arrays for list fields and a boolean for needsClarification. Do not use markdown fences. Do not return finalPrompt; the orchestrator assembles it deterministically.`;
 
 const parseJson=(text:string)=>{const trimmed=text.trim();const fenced=/^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);const parsed:any=JSON.parse(fenced?fenced[1].trim():trimmed);if(typeof parsed?.result==='string')return parseJson(parsed.result);if(Array.isArray(parsed?.content)){const textBlocks=parsed.content.filter((block:any)=>block?.type==='text'&&typeof block.text==='string').map((block:any)=>block.text).join('');return parseJson(textBlocks);}return parsed;};
 export interface ClaudeCodePromptRefinerConfig {timeoutMs:number;env?:NodeJS.ProcessEnv;platform?:NodeJS.Platform;spawn?:CliSpawn;}

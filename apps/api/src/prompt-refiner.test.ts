@@ -6,14 +6,14 @@ test('mock prompt refiner returns structured output without inventing stack deta
   const result=await new MockPromptRefiner().refine({request:'melhora a tela',workspaceName:'demo'});
   assert.equal(result.needsClarification,true);
   assert.equal(result.context[0],'Workspace: demo');
-  assert.match(result.finalPrompt,/## Acceptance criteria/);
+  assert.match(result.finalPrompt,/## Critérios de aceite/);
   assert.doesNotMatch(JSON.stringify(result),/React|Vue|PHP|PostgreSQL|MySQL/i);
 });
 
 test('final prompt is assembled deterministically by the application',()=>{
   const value={title:'T',summary:'S',objective:'O',context:[],scope:[],constraints:['C'],acceptanceCriteria:['A'],validation:['V'],outOfScope:['X'],warnings:[]};
   assert.equal(buildFinalPrompt(value),buildFinalPrompt(value));
-  assert.match(buildFinalPrompt(value),/## Objective\nO/);
+  assert.match(buildFinalPrompt(value),/## Objetivo\nO/);
 });
 
 test('OpenAI-compatible result is mocked and never trusts model finalPrompt',async()=>{
@@ -33,7 +33,7 @@ test('OpenAI-compatible timeout is bounded and error does not expose secrets',as
 test('Anthropic provider uses native Messages API and assembles finalPrompt locally',async()=>{
   const previous=globalThis.fetch;let captured:any;
   globalThis.fetch=async(input,init)=>{captured={input,init};return new Response(JSON.stringify({usage:{input_tokens:12,output_tokens:8},content:[{type:'thinking',thinking:'ignored'},{type:'text',text:'```json\n{"title":"Anthropic title","summary":"Summary","objective":"Do the requested work","context":[],"scope":["requested scope"],"constraints":[],"acceptanceCriteria":["it works"],"validation":[],"outOfScope":[],"warnings":[],"needsClarification":false,"clarifyingQuestions":[]}'},{type:'text',text:''}]}),{status:200});};
-  try {const refiner=new AnthropicPromptRefiner('custom-anthropic-model',{baseUrl:'https://api.anthropic.com',apiKey:'secret-key',timeoutMs:1000,maxOutputChars:6000,maxRetries:0,maxTokens:1200});const result=await refiner.refine({request:'Do the requested work',workspaceName:'demo',workspaceBranch:'main'});assert.equal(captured.input,'https://api.anthropic.com/v1/messages');assert.equal(captured.init.headers['x-api-key'],'secret-key');assert.equal(captured.init.headers['anthropic-version'],'2023-06-01');const body=JSON.parse(captured.init.body);assert.equal(body.model,'custom-anthropic-model');assert.equal(body.max_tokens,1200);assert.equal(body.system.includes('Do not invent:'),true);assert.equal(body.tools,undefined);assert.equal(body.messages[0].role,'user');assert.equal(body.messages[0].content.includes('demo'),true);assert.equal(body.messages[0].content.includes('main'),true);assert.deepEqual(refiner.getUsage(),{inputTokens:12,outputTokens:8});assert.equal(result.title,'Anthropic title');assert.match(result.finalPrompt,/## Objective\nDo the requested work/);assert.doesNotMatch(result.finalPrompt,/Anthropic title.*unsafe/s);}
+try {const refiner=new AnthropicPromptRefiner('custom-anthropic-model',{baseUrl:'https://api.anthropic.com',apiKey:'secret-key',timeoutMs:1000,maxOutputChars:6000,maxRetries:0,maxTokens:1200});const result=await refiner.refine({request:'Do the requested work',workspaceName:'demo',workspaceBranch:'main'});assert.equal(captured.input,'https://api.anthropic.com/v1/messages');assert.equal(captured.init.headers['x-api-key'],'secret-key');assert.equal(captured.init.headers['anthropic-version'],'2023-06-01');const body=JSON.parse(captured.init.body);assert.equal(body.model,'custom-anthropic-model');assert.equal(body.max_tokens,1200);assert.equal(body.system.includes('Do not invent:'),true);assert.equal(body.system.includes('Brazilian Portuguese'),true);assert.equal(body.tools,undefined);assert.equal(body.messages[0].role,'user');assert.equal(body.messages[0].content.includes('demo'),true);assert.equal(body.messages[0].content.includes('main'),true);assert.deepEqual(refiner.getUsage(),{inputTokens:12,outputTokens:8});assert.equal(result.title,'Anthropic title');assert.match(result.finalPrompt,/## Objetivo\nDo the requested work/);assert.doesNotMatch(result.finalPrompt,/Anthropic title.*unsafe/s);}
   finally {globalThis.fetch=previous;}
 });
 

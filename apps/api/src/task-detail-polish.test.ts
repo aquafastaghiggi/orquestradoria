@@ -12,7 +12,14 @@ test('task detail resolves workspace data and contextual actions without changin
   assert.match(main, /workspace={selected||workspaces.find(w=>w.id===task.workspaceId)}/);
   assert.match(main, /Branch configurada/);
   assert.match(main, /Branch efetiva/);
-  assert.match(main, /Esta task já foi aplicada ao workspace./);
+  assert.match(main, /Esta task já foi aplicada à branch/);
+  assert.match(main, /configSnapshot\?\.agentConfigs/);
+  assert.match(main, /provider=x\?\.provider\|\|configured\?\.provider/);
+  assert.match(main, /Resumo/);
+  assert.match(main, /Técnico/);
+  assert.match(main, /Sistema/);
+  assert.match(main, /Tamanho enviado ao reviewer/);
+  assert.match(main, /Aplicar na \{environment\.baseBranch/);
   assert.match(main, /Limite de tokens/);
   assert.match(main, /Sem limite/);
   assert.match(main, /humanizeStatus/);

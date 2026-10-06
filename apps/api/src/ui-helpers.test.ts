@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { humanizeWarning, shortTaskDescription } from '../../web/src/ui-helpers.js';
+import { humanizeStatus, humanizeWarning, shortTaskDescription } from '../../web/src/ui-helpers.js';
 
 test('shortTaskDescription extracts Summary from structured markdown', () => {
   assert.equal(
@@ -18,6 +18,13 @@ test('shortTaskDescription falls back to Objective and removes markdown', () => 
     }),
     'Validate the worktree without exposing raw headings.',
   );
+});
+
+test('humanizeStatus translates operational health labels', () => {
+  assert.equal(humanizeStatus('active'), 'Ativo');
+  assert.equal(humanizeStatus('inactive'), 'Inativo');
+  assert.equal(humanizeStatus('healthy'), 'Disponível');
+  assert.equal(humanizeStatus('unavailable'), 'Indisponível');
 });
 
 test('humanizeWarning translates configured branch fallback', () => {
