@@ -28,3 +28,5 @@ O boot aplica `ensureColumn` para acrescentar colunas de execution em bancos MVP
 # Task execution isolation
 
 Execution is isolated in a local Git worktree when the workspace supports Git. The persisted task environment is the source of truth for the execution path and lifecycle. The final Apply or Discard action is explicit and remains local; neither action pushes to a remote repository or deploys changes.
+
+Repository inspection distinguishes non-Git directories from unborn Git repositories. Worktree creation requires a committed base; preparation errors are converted into a resumable `needs_manual_review` task and handled without an API process crash.

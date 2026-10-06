@@ -13,3 +13,4 @@
 - Local Git worktrees isolate task execution from the main workspace.
 - Task environment metadata, diff, apply, discard, dirty-main protection, and non-Git fallback are persisted and exposed by the API.
 - Remote push, pull request creation, merge, and deployment remain outside the task runner.
+- Unborn repositories are diagnosed safely and can be retried after a manually created baseline commit.
