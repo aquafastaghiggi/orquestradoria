@@ -5,6 +5,8 @@ import {mkdirSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import type {HumanApprovalGates,WorkspaceType} from '@orchestrator/shared';
+export {analyzeProjectContext,projectContextDefaultLimits} from './project-context.js';
+export type {ProjectContext,ProjectContextLimits,ProjectContextStatus} from './project-context.js';
 
 export interface WorkspaceBaseline{gitAvailable:boolean;branch:string;statusBefore:string;diffBefore:string;stagedDiffBefore:string;untrackedBefore:string[];fileHashesBefore?:Record<string,string>;capturedAt:string;}
 export interface WorkspaceStateAfter{gitAvailable:boolean;branch:string;statusAfter:string;diffAfter:string;stagedDiffAfter:string;untrackedAfter:string[];fileHashesAfter?:Record<string,string>;capturedAt:string;}

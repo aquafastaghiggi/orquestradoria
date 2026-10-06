@@ -8,6 +8,8 @@
 - Fase 6: Cursor/outros providers
 - Fase 7: custos, budgets, fallback de modelos
 - Fase 8: multi-agent avançado
+- Fase 2.1: Project Context persistente e análise determinística por workspace
+- Fase 2.2: integração futura do Project Context aos prompts do pipeline
 # Delivered: task isolation
 
 - Local Git worktrees isolate task execution from the main workspace.
