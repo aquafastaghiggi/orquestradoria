@@ -50,3 +50,8 @@ export function providerLabel(provider?: string) {
   if (provider === 'anthropic') return 'Anthropic API';
   return provider || 'Mock';
 }
+
+export function shortTaskDescription(task: { description?: string; summary?: string; objective?: string; structuredResult?: any }) {
+  const value = task.summary || task.objective || task.description || 'Sem descrição disponível.';
+  return value.replace(/^#\s*(Summary|Objective|Context|Scope|Constraints)[:\s]*/i, '').replace(/\s+/g, ' ').trim();
+}
