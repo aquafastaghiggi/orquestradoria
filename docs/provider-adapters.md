@@ -8,7 +8,7 @@ Cada adapter declara `ProviderCapabilities`. O contrato de execução recebe `Ex
 
 ## Health e catálogo
 
-Adapters futuros devem alimentar ProviderHealth e ModelCatalog sem acoplar o core a SDKs. A autenticação é reportada como estado, não inferida a partir da execução.
+O registry compartilhado alimenta ProviderHealth e ModelCatalog sem acoplar o core a SDKs. A autenticação é reportada como estado, não inferida a partir da execução. Configuração global e por workspace é persistida pela API; o snapshot da task congela a seleção e o router nunca faz fallback silencioso de provider real para Mock.
 
 ## Prompt Refiner Anthropic
 

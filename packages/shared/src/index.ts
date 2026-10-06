@@ -32,3 +32,4 @@ export const DEFAULT_RETENTION:RetentionConfig={eventsDays:30,logsDays:30,artifa
 export const TASK_STATUSES:TaskStatus[]=['pending','analyzing','planning','implementing','testing','reviewing','needs_fix','needs_manual_review','approved','human_review_required','cancelled','failed','stalled'];
 
 export * from './sse.js';
+export * from './provider-registry.js';

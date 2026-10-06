@@ -10,6 +10,8 @@ Antes do adapter, o runner cria um `StageContext` específico com `ContextBuilde
 
 O `PipelineRunner` conhece apenas o contrato `ProviderAdapter`. Portanto, trocar MockAdapter por um provider futuro não altera o core.
 
+O registry de providers/modelos é compartilhado entre API e UI. Defaults globais, overrides por workspace e snapshots de task seguem precedência explícita; health é cacheado e exposto por REST/SSE. Providers reais indisponíveis geram erro de configuração controlado, sem fallback silencioso para Mock.
+
 ## Proteções
 
 Policies ficam em `packages/workspace`: deny push/deploy/comandos destrutivos/secrets, timeout, maxIterations e aprovação humana. O MVP não executa comandos de projeto nem fornece sandbox.
