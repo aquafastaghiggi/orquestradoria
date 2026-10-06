@@ -19,6 +19,15 @@ test('task detail resolves workspace data and contextual actions without changin
   assert.match(main, /Técnico/);
   assert.match(main, /Sistema/);
   assert.match(main, /Tamanho enviado ao reviewer/);
+  assert.match(main, /Contexto da task/);
+  assert.match(main, /Contexto do projeto/);
+  assert.match(main, /Pacote de revisão/);
+  assert.match(main, /Pronto/);
+  assert.match(main, /toLocaleString\('pt-BR'\)/);
+  assert.match(main, /slice\(0,8\)/);
+  assert.match(main, /Ver contexto enviado/);
+  assert.match(main, /Copiar contexto/);
+  assert.match(main, /project-context-stage-grid/);
   assert.match(main, /Aplicar na \{environment\.baseBranch/);
   assert.match(main, /Limite de tokens/);
   assert.match(main, /Sem limite/);
