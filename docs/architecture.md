@@ -26,7 +26,7 @@ Executions preservam providerSessionId, conversationId, resumeToken e parentExec
 
 O boot aplica `ensureColumn` para acrescentar colunas de execution em bancos MVP existentes e cria as novas tabelas de catálogo, health, templates e retention com `CREATE TABLE IF NOT EXISTS`. Isso mantém o upgrade local sem provider ou migration externa.
 
-Project Context é analisado de forma determinística e read-only por `packages/workspace`, persistido em `workspace_contexts` e exposto por REST/SSE. Ele não é enviado ao pipeline nesta fase.
+Project Context é analisado de forma determinística e read-only por `packages/workspace`, persistido em `workspace_contexts` e exposto por REST/SSE. Ao criar uma task, o snapshot é congelado em `tasks`; `packages/core` renderiza uma visão role-selective e segura no `ContextBuilder`, e cada execution registra hash, versão, status, commit, tamanho e texto renderizado. Reviewer mantém diff, arquivos efetivamente alterados, tester report e ReviewBundle como fontes separadas.
 # Task execution isolation
 
 Execution is isolated in a local Git worktree when the workspace supports Git. The persisted task environment is the source of truth for the execution path and lifecycle. The final Apply or Discard action is explicit and remains local; neither action pushes to a remote repository or deploys changes.

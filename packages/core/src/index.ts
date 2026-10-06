@@ -1,5 +1,6 @@
 import type {AgentRole,ExecutionContext,FailureKind,ProviderAdapter,ProviderExecutionResult,TaskStatus} from '@orchestrator/shared';
 import {buildStageContext} from './context-builder.js';
+export * from './project-context.js';
 
 export const roleToStatus:Record<AgentRole,TaskStatus>={analyst:'analyzing',planner:'planning',developer:'implementing',tester:'testing',reviewer:'reviewing'};
 export interface RetryPolicy{maxRetries:number;retryOn:FailureKind[];backoffMs:number;}
@@ -34,7 +35,7 @@ export class PipelineRunner{
    if(!cycleNeedsFix){if(pipeline.includes('reviewer')&&!completedStages.includes('reviewer'))throw pipelineIncompleteError(pipeline,completedStages);return outputs;}cycle++;
   }
  }
- private buildContext(role:AgentRole,base:Omit<ExecutionContext,'stage'>):ExecutionContext{const diff=base.previousArtifacts.find(a=>a.type==='diff');let changedFiles:string[]=[];try{const value=diff?JSON.parse(diff.content):undefined;changedFiles=value?.changes?.filesChanged||value?.actualFilesChanged||[];}catch{}const stageContext=buildStageContext({task:base.task,role,workspaceContext:base.workspaceContext,projectRules:base.projectRules,artifacts:base.previousArtifacts,changedFiles,diff:diff?.content,acceptanceCriteria:[`The requested outcome is implemented and verified: ${base.task.description}`],tests:base.previousArtifacts.filter(a=>a.type==='test_report').map(a=>a.content)});return{...base,stage:role,stageContext};}
+ private buildContext(role:AgentRole,base:Omit<ExecutionContext,'stage'>):ExecutionContext{const diff=base.previousArtifacts.find(a=>a.type==='diff');let changedFiles:string[]=[];try{const value=diff?JSON.parse(diff.content):undefined;changedFiles=value?.changes?.filesChanged||value?.actualFilesChanged||[];}catch{}const stageContext=buildStageContext({task:base.task,role,workspaceContext:base.workspaceContext,projectRules:base.projectRules,artifacts:base.previousArtifacts,changedFiles,diff:diff?.content,acceptanceCriteria:[`The requested outcome is implemented and verified: ${base.task.description}`],tests:base.previousArtifacts.filter(a=>a.type==='test_report').map(a=>a.content),projectContext:(base as any).projectContext});return{...base,stage:role,stageContext};}
 }
 export function resumeIndex(pipeline:AgentRole[],lastSuccessful?:AgentRole){if(!lastSuccessful)return 0;const index=pipeline.indexOf(lastSuccessful);return index<0?0:index+1;}
 export const NON_RETRYABLE_FAILURES:FailureKind[]=['configuration_error','cli_invocation_error','validation_error','authentication_error','cancelled','budget_exceeded'];

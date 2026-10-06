@@ -1,4 +1,5 @@
 import type {AgentRole,Artifact,ContextManifest,ExecutionContext,ReviewBundle,ReviewScope,StageContext,Task} from '@orchestrator/shared';
+import {buildProjectContextForRole, type ProjectContextSnapshotInput} from './project-context.js';
 
 export interface ProjectContextSummary {language?:string;framework?:string;packageManager?:string;relevantPaths?:string[];testCommands?:string[];rules?:string[];}
 export interface StageContextOptions {
@@ -18,6 +19,8 @@ export interface StageContextOptions {
   reviewScope?:ReviewScope;
   reviewBundle?:ReviewBundle;
   maxChars?:number;
+  projectContext?:ProjectContextSnapshotInput|Record<string,unknown>|null;
+  projectContextMaxChars?:number;
 }
 
 const DEFAULT_LIMITS:Record<AgentRole,number>={analyst:8000,planner:10000,developer:16000,tester:12000,reviewer:30000};
@@ -42,6 +45,7 @@ function selectDiff(diff:string|undefined,changedFiles:string[],maxChars:number)
 
 export function buildStageContext(options:StageContextOptions):StageContext{
   const limit=options.maxChars||DEFAULT_LIMITS[options.role];
+  const projectContext=buildProjectContextForRole(options.projectContext,options.role,options.projectContextMaxChars);
   const changedFiles=[...new Set(options.changedFiles||[])];
   const selected=selectArtifacts(options.role,options.artifacts||[]);
   const diffBudget=Math.floor(limit*.42);
@@ -54,6 +58,7 @@ export function buildStageContext(options:StageContextOptions):StageContext{
   if(options.originalRequest&&options.originalRequest!==options.refinedRequest)add('ORIGINAL REQUEST (compact)',options.originalRequest);
   add('ACCEPTANCE CRITERIA',list(options.acceptanceCriteria)||'Implement and verify the requested outcome.');
   add('CONSTRAINTS',list(options.projectRules||[]));
+  if(projectContext)add('PROJECT CONTEXT',projectContext.text);
   if(options.projectSummary)add('PROJECT SUMMARY',[options.projectSummary.language&&`Language: ${options.projectSummary.language}`,options.projectSummary.framework&&`Framework: ${options.projectSummary.framework}`,options.projectSummary.packageManager&&`Package manager: ${options.projectSummary.packageManager}`,options.projectSummary.relevantPaths?.length&&`Relevant paths: ${options.projectSummary.relevantPaths.join(', ')}`,options.projectSummary.testCommands?.length&&`Test commands: ${options.projectSummary.testCommands.join(', ')}`].filter(Boolean).join('\n'));
   if(options.role==='planner'){
     add('PLANNING SCOPE',`Workspace: ${options.workspaceContext.location}`);
@@ -70,7 +75,7 @@ export function buildStageContext(options:StageContextOptions):StageContext{
   const raw=parts.join('');let prompt=raw;let truncated=selectedDiff.truncated;let omittedChars=selectedDiff.omittedChars;const filesOmitted=[...selectedDiff.omittedFiles];
   if(prompt.length>limit){const kept=prompt.slice(0,Math.max(0,limit-160));prompt=`${kept}\n\n[Context truncated at ${limit} characters. Omitted lower-priority sections.]`;truncated=true;omittedChars=(omittedChars||0)+raw.length-prompt.length;}
   const manifest:ContextManifest={role:options.role,includedSections,excludedSections,filesIncluded:options.reviewBundle?.filesIncluded||changedFiles.slice(0,changedFiles.length-filesOmitted.length),filesOmitted:options.reviewBundle?.filesOmitted||filesOmitted,charCount:prompt.length,truncated,omittedChars:omittedChars||undefined};
-  return {prompt,manifest,contextChars:prompt.length,contextSections:includedSections,contextTruncated:truncated,contextFilesIncluded:manifest.filesIncluded,contextFilesOmitted:filesOmitted,reviewBundle:options.reviewBundle};
+  return {prompt,manifest,contextChars:prompt.length,contextSections:includedSections,contextTruncated:truncated,contextFilesIncluded:manifest.filesIncluded,contextFilesOmitted:filesOmitted,reviewBundle:options.reviewBundle,projectContext:projectContext||undefined};
 }
 
 export {DEFAULT_LIMITS};
