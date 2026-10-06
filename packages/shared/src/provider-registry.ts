@@ -11,5 +11,7 @@ export const PROVIDER_REGISTRY:ProviderRegistryEntry[]=[
   {id:'mock',name:'Mock',type:'internal',roles:['planner','developer','tester','reviewer'],authMode:'not_applicable',billingMode:'no_external_cost',capabilities:internalCapabilities,models:['mock-fast','mock-reasoning'].map(modelId=>({providerId:'mock',modelId,displayName:modelId,enabled:true,capabilities:internalCapabilities,contextWindow:null,inputCostPerMillion:0,outputCostPerMillion:0,metadata:{source:'internal'}}))}
 ];
 export const DEFAULT_PROVIDER_CONFIG:Partial<Record<AgentRole,{provider:string;model:string}>>={planner:{provider:'mock',model:'mock-fast'},developer:{provider:'claude-code',model:'sonnet'},tester:{provider:'command-tester',model:'local-command-runner'},reviewer:{provider:'codex-cli',model:'gpt-5.6-luna'}};
+export type CanonicalProviderAuth='cli_managed'|'not_applicable';
+export function providerAuthSemantics(providerId:string){const provider=PROVIDER_REGISTRY.find(item=>item.id===providerId);return provider?.authMode==='account_session_or_cli_managed'?{authMode:'cli_managed' as const,authenticationStatus:'cli_managed' as const}:{authMode:'not_applicable' as const,authenticationStatus:'not_applicable' as const};}
 export function providerForRole(providerId:string,role:AgentRole){return PROVIDER_REGISTRY.find(provider=>provider.id===providerId&&provider.roles.includes(role));}
 export function modelForProvider(providerId:string,modelId:string){return PROVIDER_REGISTRY.find(provider=>provider.id===providerId)?.models.find(model=>model.modelId===modelId&&model.enabled);}
