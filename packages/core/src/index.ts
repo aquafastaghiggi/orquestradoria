@@ -47,3 +47,4 @@ export function assertPipelineApprovalIntegrity(task:{pipeline?:AgentRole[];last
 export * from './prompt-refiner.js';
 export * from './context-builder.js';
 export * from './usage.js';
+export * from './mission-planner.js';
