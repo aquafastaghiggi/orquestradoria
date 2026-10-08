@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {RuntimeDetector,RuntimeSessionManager} from '@orchestrator/workspace';
-import {BrowserQaRunner,CommandTesterAdapter,smokeRoutes} from '@orchestrator/adapters';
+import {RuntimeDetector,RuntimeSessionManager,prepareRuntimeCommand} from '@orchestrator/workspace';
+import {BrowserQaRunner,CommandTesterAdapter,buildTesterSummary,smokeRoutes} from '@orchestrator/adapters';
 
 test('runtime detector serves static workspaces and stops safely',async()=>{
   const root=mkdtempSync(join(tmpdir(),'orquestradoria-runtime-'));
@@ -72,4 +72,22 @@ test('browser QA records same-origin HTTP failures and applies the external reso
   assert.equal(await handlers.route(route('http://example.com/x')),'blockedbyclient');
   assert.equal(await handlers.route(route('https://127.0.0.1/x')),'blockedbyclient');
   assert.equal(await handlers.route(route('https://example.com/',true)),'blockedbyclient');
+});
+
+test('Windows Vite runtime wraps .cmd executables through cmd.exe without shell mode',()=>{
+  const invocation=prepareRuntimeCommand('C:\\tools\\pnpm.cmd',['run','dev','--','--port','4321'],'win32');
+  assert.equal(invocation.command,'cmd.exe');
+  assert.deepEqual(invocation.args.slice(0,4),['/d','/c','call','"C:\\tools\\pnpm.cmd"']);
+  assert.equal(invocation.shell,false);
+  assert.notEqual(invocation.command,'C:\\tools\\pnpm.cmd');
+});
+
+test('Tester summaries reflect command and browser states',()=>{
+  assert.equal(buildTesterSummary('PASSED','PASSED'),'Command QA and browser smoke QA passed');
+  assert.equal(buildTesterSummary('BLOCKED','PASSED','PASSED'),'Command QA unavailable; browser smoke QA passed');
+  assert.equal(buildTesterSummary('PASSED','BLOCKED','PASSED'),'Command QA passed; browser smoke QA unavailable');
+  assert.equal(buildTesterSummary('BLOCKED','BLOCKED'),'No command QA or browser QA was available');
+  assert.equal(buildTesterSummary('FAILED','PASSED'),'Command QA failed');
+  assert.equal(buildTesterSummary('PASSED','FAILED'),'Browser smoke QA failed');
+  assert.match(buildTesterSummary('BLOCKED','PASSED','BLOCKED'),/requires command QA/);
 });

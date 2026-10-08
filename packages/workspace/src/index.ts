@@ -5,7 +5,7 @@ import {mkdirSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import type {HumanApprovalGates,WorkspaceType} from '@orchestrator/shared';
-export {RuntimeDetector,RuntimeSessionManager,getFreeLocalPort} from './runtime-session.js';
+export {RuntimeDetector,RuntimeSessionManager,getFreeLocalPort,prepareRuntimeCommand} from './runtime-session.js';
 export type {RuntimeProfile,RuntimeSession,RuntimeDetectorOptions} from './runtime-session.js';
 export {analyzeProjectContext,projectContextDefaultLimits} from './project-context.js';
 export type {ProjectContext,ProjectContextLimits,ProjectContextStatus} from './project-context.js';
