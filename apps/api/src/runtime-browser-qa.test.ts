@@ -123,6 +123,24 @@ test('browser plan selects newest artifact and preserves invalid-plan diagnostic
   const result=browserPlan([invalid]);assert.equal(result.planned,true);assert.equal(result.scenarios.length,0);assert.match(result.error||'',/same-origin/);
 });
 
+test('ARIA roles are validated at the Tester boundary while Developer keeps the raw proposal',()=>{
+  for(const role of ['spinbutton','listitem','table','row','cell']){
+    const plan=validateBrowserScenarios([{name:role,route:'/',steps:[{action:'expectVisible',target:{role,name:role}}]}]);
+    assert.equal(plan[0].steps[0].target?.role,role);
+  }
+  assert.throws(()=>validateBrowserScenarios([{name:'bad',route:'/',steps:[{action:'click',target:{role:'superbutton' as any}}]}]),/superbutton/);
+  const raw=validateClaudeDeveloperResult({status:'COMPLETED',summary:'ok',filesChanged:[],testsRun:[],notes:[],browserScenarios:[{name:'Mapa',route:'/',steps:[{action:'click',target:{role:'superbutton',name:'Mapa'}}]}]});
+  assert.equal((raw.browserScenarios as any)[0].steps[0].target.role,'superbutton');
+});
+
+test('invalid interactive plan is a repairable FAILED result with a structured error',async()=>{
+  const page:any={on:()=>{},goto:async()=>({status:()=>200}),waitForTimeout:async()=>{},screenshot:async()=>{},close:async()=>{},url:()=> 'http://127.0.0.1:4321/'};
+  const context:any={route:async()=>{},newPage:async()=>page,close:async()=>{}};
+  const launcher:any={launch:async()=>({newContext:async()=>context,close:async()=>{}})};
+  const result=await new BrowserQaRunner(launcher).run({baseUrl:'http://127.0.0.1:4321',routes:['/'],screenshotDir:mkdtempSync(join(tmpdir(),'orquestradoria-invalid-plan-')),interactiveEnabled:true,interactivePlanError:'Unsupported browser target role: "superbutton"',interactiveRequired:true});
+  assert.equal(result.status,'FAILED');assert.equal(result.interactiveStatus,'FAILED');assert.deepEqual(result.interactivePlanError,{type:'invalid_browser_qa_plan',message:'Unsupported browser target role: "superbutton"'});assert.equal(result.summary,'Interactive Browser QA plan is invalid.');
+});
+
 test('interactive runner uses allowlisted page APIs and records a failed assertion with evidence',async()=>{
   const events:string[]=[];const screenshotPaths:string[]=[];
   const locator={fill:async()=>{},click:async()=>{},textContent:async()=> 'different',waitFor:async()=>{},inputValue:async()=>'',count:async()=>0,selectOption:async()=>{},check:async()=>{},uncheck:async()=>{},press:async()=>{}};
