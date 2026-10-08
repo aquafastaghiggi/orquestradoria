@@ -12,7 +12,7 @@ export type {ClaudeArgsInput,ClaudeCapabilities,ClaudeCodeConfig,ClaudeDeveloper
 export {buildWindowsCmdInvocation,createCliSpawn,prepareCliInvocation,resolveWindowsCmdTarget,runCliProcess} from './cli-process.js';
 export type {CliSpawn,CommandInvocation,CliProcessResult} from './cli-process.js';
 export {CommandTesterAdapter,detectProjectProfile,normalizeAssignedFiles} from './tester.js';
-export {ClaudeCodeMissionPlanner} from './mission-planner.js';
+export {ClaudeCodeMissionPlanner,normalizeMissionPlannerOutput} from './mission-planner.js';
 export {parseClaudeStructuredText} from './claude.js';
 export type {ClaudeMissionPlannerConfig} from './mission-planner.js';
 export type {CommandTesterConfig,TesterResult,TesterCommandResult,ProjectTestProfile,TestCommand} from './tester.js';
