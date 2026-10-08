@@ -13,5 +13,6 @@ export {buildWindowsCmdInvocation,createCliSpawn,prepareCliInvocation,resolveWin
 export type {CliSpawn,CommandInvocation,CliProcessResult} from './cli-process.js';
 export {CommandTesterAdapter,detectProjectProfile,normalizeAssignedFiles} from './tester.js';
 export {ClaudeCodeMissionPlanner} from './mission-planner.js';
+export {parseClaudeStructuredText} from './claude.js';
 export type {ClaudeMissionPlannerConfig} from './mission-planner.js';
 export type {CommandTesterConfig,TesterResult,TesterCommandResult,ProjectTestProfile,TestCommand} from './tester.js';
