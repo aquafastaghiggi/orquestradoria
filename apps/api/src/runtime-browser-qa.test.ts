@@ -4,7 +4,7 @@ import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {RuntimeDetector,RuntimeSessionManager,prepareRuntimeCommand} from '@orchestrator/workspace';
-import {BrowserQaRunner,BrowserScenarioRunner,CommandTesterAdapter,buildTesterSummary,smokeRoutes,validateBrowserScenarios} from '@orchestrator/adapters';
+import {BrowserQaRunner,BrowserScenarioRunner,CommandTesterAdapter,buildTesterSummary,browserPlan,locatorFor,smokeRoutes,validateBrowserScenarios} from '@orchestrator/adapters';
 import {validateClaudeDeveloperResult} from '@orchestrator/adapters';
 
 test('runtime detector serves static workspaces and stops safely',async()=>{
@@ -101,6 +101,26 @@ test('legacy developer output remains valid and browser scenario plans are stric
   assert.throws(()=>validateBrowserScenarios([{name:'externo',route:'https://example.com',steps:[]}]),/relative/);
   assert.throws(()=>validateBrowserScenarios([{name:'invalido',route:'/',steps:[{action:'eval' as any}]}]),/Unknown browser scenario action/);
   assert.throws(()=>validateBrowserScenarios([{name:'xpath',route:'/',steps:[{action:'click',target:{selector:'//button'}}]}]),/XPath/);
+});
+
+test('interactive browser validation preserves role name and rejects unsafe goto locators',()=>{
+  const plan=validateBrowserScenarios([{name:'Salvar',route:'/',steps:[{action:'click',target:{role:'button',name:'Salvar'}}]}]);
+  assert.deepEqual(plan[0].steps[0].target,{role:'button',name:'Salvar'});
+  const calls:any[]=[];locatorFor({getByRole:(role:string,options:any)=>{calls.push({role,options});return{};}},{role:'button',name:'Salvar'});
+  assert.deepEqual(calls,[{role:'button',options:{name:'Salvar'}}]);
+  assert.throws(()=>validateBrowserScenarios([{name:'bad',route:'/',steps:[{action:'click',target:{name:'Salvar'}}]}]),/only valid with/);
+  assert.throws(()=>validateBrowserScenarios([{name:'bad',route:'/',steps:[{action:'click',target:{label:'Nome',name:'Salvar'}}]}]),/only valid with/);
+  assert.throws(()=>validateBrowserScenarios([{name:'bad',route:'/',steps:[{action:'goto',value:'https://example.com'}]}]),/same-origin/);
+  assert.throws(()=>validateBrowserScenarios([{name:'bad',route:'/',steps:[{action:'goto'}]}]),/same-origin/);
+});
+
+test('browser plan selects newest artifact and preserves invalid-plan diagnostics',()=>{
+  const base:any={type:'browser_qa_plan',createdAt:'2026-01-01T00:00:00.000Z'};
+  const old={...base,content:JSON.stringify([{name:'old',route:'/',steps:[]}])};
+  const newer={...base,createdAt:'2026-01-02T00:00:00.000Z',content:JSON.stringify([{name:'new',route:'/',steps:[]}])};
+  assert.equal(browserPlan([old,newer]).scenarios[0].name,'new');
+  const invalid={...newer,content:JSON.stringify([{name:'bad',route:'/',steps:[{action:'goto',value:'https://example.com'}]}])};
+  const result=browserPlan([invalid]);assert.equal(result.planned,true);assert.equal(result.scenarios.length,0);assert.match(result.error||'',/same-origin/);
 });
 
 test('interactive runner uses allowlisted page APIs and records a failed assertion with evidence',async()=>{

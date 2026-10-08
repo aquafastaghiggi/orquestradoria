@@ -12,12 +12,12 @@ export {buildClaudeArgs,classifyClaudeCliError,parseClaudeCapabilities,validateC
 export type {ClaudeArgsInput,ClaudeCapabilities,ClaudeCodeConfig,ClaudeDeveloperResult,ClaudeProviderHealth,ClaudeResolvedExecutable,ClaudeResolveOptions} from './claude.js';
 export {buildWindowsCmdInvocation,createCliSpawn,prepareCliInvocation,resolveWindowsCmdTarget,runCliProcess} from './cli-process.js';
 export type {CliSpawn,CommandInvocation,CliProcessResult} from './cli-process.js';
-export {CommandTesterAdapter,buildTesterSummary,detectProjectProfile,normalizeAssignedFiles} from './tester.js';
+export {CommandTesterAdapter,buildTesterSummary,browserPlan,detectProjectProfile,normalizeAssignedFiles} from './tester.js';
 export {ClaudeCodeMissionPlanner,normalizeMissionPlannerOutput} from './mission-planner.js';
 export {parseClaudeStructuredText} from './claude.js';
 export type {ClaudeMissionPlannerConfig} from './mission-planner.js';
 export type {CommandTesterConfig,TesterResult,TesterCommandResult,ProjectTestProfile,TestCommand} from './tester.js';
 export {BrowserQaRunner,smokeRoutes} from './browser-qa.js';
 export type {BrowserQaResult,BrowserQaRouteResult,BrowserQaLauncher} from './browser-qa.js';
-export {BrowserScenarioRunner,validateBrowserScenarios} from './browser-scenario-runner.js';
+export {BrowserScenarioRunner,locatorFor,validateTarget,validateBrowserScenarios} from './browser-scenario-runner.js';
 export type {BrowserScenarioResult,BrowserScenarioStepResult} from './browser-scenario-runner.js';
