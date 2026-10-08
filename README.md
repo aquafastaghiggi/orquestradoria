@@ -103,3 +103,15 @@ A segunda etapa adiciona AgentConfig por snapshot de task, ProviderCapabilities,
 ## Codex CLI reviewer
 
 Para habilitar somente o reviewer Codex CLI, instale e autentique o CLI localmente, configure `CODEX_MODEL` e inicie a API com `REVIEWER_PROVIDER=codex-cli`. Planner, developer e tester permanecem no MockAdapter. Consulte [docs/codex-cli-adapter.md](docs/codex-cli-adapter.md) antes de executar qualquer review real.
+
+## QA no navegador
+
+O Tester pode executar smoke QA opcional em um runtime local isolado. A política global ou do workspace controla `browserQaEnabled` e `browserQaRequired`; ambas ficam congeladas no snapshot da task. O runtime suporta páginas estáticas, PHP via `php -S` e projetos Vite via script `dev`, sempre em `127.0.0.1` e com uma porta livre.
+
+Quando habilitado, o Orquestradoria verifica a rota inicial e até dez páginas HTML alteradas/adicionadas, bloqueia navegação para outras origens e registra erros de console, exceções de página, falhas de requisição e respostas HTTP `>= 400`. Screenshots e o relatório `browser_qa_report` ficam fora do worktree. Para disponibilizar o Chromium localmente, execute uma vez:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+`browserQaRequired=false` registra indisponibilidade como aviso; `true` transforma runtime/browser indisponível em bloqueio do Tester.
