@@ -4,7 +4,8 @@ import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {RuntimeDetector,RuntimeSessionManager,prepareRuntimeCommand} from '@orchestrator/workspace';
-import {BrowserQaRunner,CommandTesterAdapter,buildTesterSummary,smokeRoutes} from '@orchestrator/adapters';
+import {BrowserQaRunner,BrowserScenarioRunner,CommandTesterAdapter,buildTesterSummary,smokeRoutes,validateBrowserScenarios} from '@orchestrator/adapters';
+import {validateClaudeDeveloperResult} from '@orchestrator/adapters';
 
 test('runtime detector serves static workspaces and stops safely',async()=>{
   const root=mkdtempSync(join(tmpdir(),'orquestradoria-runtime-'));
@@ -90,4 +91,23 @@ test('Tester summaries reflect command and browser states',()=>{
   assert.equal(buildTesterSummary('FAILED','PASSED'),'Command QA failed');
   assert.equal(buildTesterSummary('PASSED','FAILED'),'Browser smoke QA failed');
   assert.match(buildTesterSummary('BLOCKED','PASSED','BLOCKED'),/requires command QA/);
+});
+
+test('legacy developer output remains valid and browser scenario plans are strictly validated',()=>{
+  const legacy=validateClaudeDeveloperResult({status:'COMPLETED',summary:'ok',filesChanged:[],testsRun:[],notes:[]});
+  assert.equal(legacy.browserScenarios,undefined);
+  const plan=validateBrowserScenarios([{name:'Criar POI',route:'/admin.html',steps:[{action:'fill',target:{label:'Nome'},value:'POI QA'},{action:'click',target:{role:'button',name:'Salvar'}},{action:'expectText',target:{selector:'#lista-pois'},text:'POI QA'}]}]);
+  assert.equal(plan[0].steps.length,3);
+  assert.throws(()=>validateBrowserScenarios([{name:'externo',route:'https://example.com',steps:[]}]),/relative/);
+  assert.throws(()=>validateBrowserScenarios([{name:'invalido',route:'/',steps:[{action:'eval' as any}]}]),/Unknown browser scenario action/);
+  assert.throws(()=>validateBrowserScenarios([{name:'xpath',route:'/',steps:[{action:'click',target:{selector:'//button'}}]}]),/XPath/);
+});
+
+test('interactive runner uses allowlisted page APIs and records a failed assertion with evidence',async()=>{
+  const events:string[]=[];const screenshotPaths:string[]=[];
+  const locator={fill:async()=>{},click:async()=>{},textContent:async()=> 'different',waitFor:async()=>{},inputValue:async()=>'',count:async()=>0,selectOption:async()=>{},check:async()=>{},uncheck:async()=>{},press:async()=>{}};
+  const page:any={goto:async()=>({status:()=>200}),url:()=> 'http://127.0.0.1:4000/',on:()=>{},getByLabel:()=>locator,getByRole:()=>locator,locator:()=>locator,screenshot:async({path}:any)=>screenshotPaths.push(path),close:async()=>{},context:()=>({clearCookies:async()=>{}})};
+  const context:any={newPage:async()=>page,route:async()=>{},close:async()=>{}};
+  const results=await new BrowserScenarioRunner().run(context,[{name:'Falha',route:'/',steps:[{action:'expectText',target:{label:'Nome'},text:'esperado'}]}],{baseUrl:'http://127.0.0.1:4000',screenshotDir:'storage/local/browser-qa/test-scenario',onEvent:type=>events.push(type)});
+  assert.equal(results[0].status,'FAILED');assert.ok(results[0].screenshots.length>=1);assert.ok(screenshotPaths.length>=1);assert.ok(events.includes('browser_qa.step_failed'));
 });

@@ -1,7 +1,12 @@
 export type WorkspaceType = 'local'|'git'|'ssh';export type WorkspaceStatus = 'active'|'paused'|'archived';
 export type TaskStatus = 'pending'|'analyzing'|'planning'|'implementing'|'testing'|'reviewing'|'needs_fix'|'needs_manual_review'|'approved'|'human_review_required'|'cancelled'|'failed'|'stalled';
 export type ExecutionStatus = 'queued'|'running'|'completed'|'failed'|'cancelled'|'timed_out'|'stalled';export type AgentRole='analyst'|'planner'|'developer'|'tester'|'reviewer';
-export type FailureKind='provider_error'|'timeout'|'validation_error'|'configuration_error'|'cli_invocation_error'|'authentication_error'|'review_rejected'|'cancelled'|'budget_exceeded'|'pipeline_incomplete';export type ArtifactType='plan'|'implementation_summary'|'diff'|'review'|'test_report'|'browser_qa_report'|'log'|'generated_file'|'context_snapshot'|'workspace_baseline'|'context_manifest';
+export type FailureKind='provider_error'|'timeout'|'validation_error'|'configuration_error'|'cli_invocation_error'|'authentication_error'|'review_rejected'|'cancelled'|'budget_exceeded'|'pipeline_incomplete';export type ArtifactType='plan'|'implementation_summary'|'diff'|'review'|'test_report'|'browser_qa_report'|'browser_qa_plan'|'log'|'generated_file'|'context_snapshot'|'workspace_baseline'|'context_manifest';
+export type BrowserScenarioAction='goto'|'fill'|'click'|'selectOption'|'check'|'uncheck'|'press'|'reload'|'waitForVisible'|'expectVisible'|'expectHidden'|'expectText'|'expectValue'|'expectCount'|'screenshot'|'clearStorage';
+export interface BrowserTarget{role?:'button'|'link'|'checkbox'|'heading'|'textbox'|'combobox'|'radio'|'option';name?:string;label?:string;placeholder?:string;text?:string;testId?:string;selector?:string;}
+export interface BrowserDialogExpectation{action:'accept'|'dismiss';messageIncludes?:string;}
+export interface BrowserScenarioStep{action:BrowserScenarioAction;target?:BrowserTarget;value?:string|number|boolean;text?:string;count?:number;dialog?:BrowserDialogExpectation;timeoutMs?:number;}
+export interface BrowserScenario{name:string;description?:string;route:string;resetStorage?:boolean;steps:BrowserScenarioStep[];}
 export interface Workspace{id:string;name:string;type:WorkspaceType;location:string;branch?:string;status:WorkspaceStatus;taskBudgetUsd:number;monthlyBudgetUsd:number;createdAt:string;updatedAt:string;}
 export interface AgentConfig{role:AgentRole;provider:string;model:string;timeoutSeconds:number;maxRetries:number;maxIterations:number;budgetUsd:number;tokenBudget:number;fallbackProviders:string[];enabled:boolean;}
 export interface SecurityPolicy{denyGitPush:boolean;denyDeploy:boolean;denyDestructiveCommands:boolean;denySecrets:boolean;timeoutMs:number;maxIterations:number;requireHumanApproval:boolean;}
