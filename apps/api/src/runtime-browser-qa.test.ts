@@ -4,7 +4,7 @@ import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {RuntimeDetector,RuntimeSessionManager} from '@orchestrator/workspace';
-import {BrowserQaRunner,smokeRoutes} from '@orchestrator/adapters';
+import {BrowserQaRunner,CommandTesterAdapter,smokeRoutes} from '@orchestrator/adapters';
 
 test('runtime detector serves static workspaces and stops safely',async()=>{
   const root=mkdtempSync(join(tmpdir(),'orquestradoria-runtime-'));
@@ -38,3 +38,38 @@ test('browser QA routes are bounded and use an injectable launcher without Chrom
   }finally{rmSync(root,{recursive:true,force:true});}
 });
 
+test('HTML-only projects continue to Browser QA when command QA has no commands',async()=>{
+  const profile:any={projectType:'html',commands:[],notes:[],unvalidatedFiles:[]};
+  const runtime:any={start:async()=>({profile:{type:'static'},baseUrl:'http://127.0.0.1:12345',status:'ready'}),stop:async()=>{}};
+  const browser:any={run:async()=>({status:'PASSED',baseUrl:'http://127.0.0.1:12345',routes:[{route:'/',status:'PASSED',errors:[]}],consoleErrors:[],pageErrors:[],failedRequests:[],externalOrigins:[],screenshots:[],durationMs:1,summary:'ok'})};
+  const input:any={stage:'tester',task:{id:'html-only',configSnapshot:{}},workspaceContext:{location:process.cwd()},stageContext:{contextFilesIncluded:['index.html']},previousArtifacts:[]};
+  const optional=await new CommandTesterAdapter({profile,browserQaEnabled:true,testerRequired:false,runtimeManager:runtime,browserQaRunner:browser}).execute(input);
+  assert.equal((optional.structuredResult as any).commandQa.status,'BLOCKED');
+  assert.equal((optional.structuredResult as any).browserQa.status,'PASSED');
+  assert.equal((optional.structuredResult as any).status,'PASSED');
+  const required=await new CommandTesterAdapter({profile,browserQaEnabled:true,testerRequired:true,runtimeManager:runtime,browserQaRunner:browser}).execute(input);
+  assert.equal((required.structuredResult as any).status,'BLOCKED');
+});
+
+test('runtime executable resolution handles Windows extensions without shell execution',()=>{
+  assert.equal(new RuntimeDetector({platform:'win32',env:{PATH:'C:\\tools',PATHEXT:'.EXE;.CMD'},which:command=>command==='php'?undefined:undefined}).detect('C:\\missing').type,'unsupported');
+  const detector=new RuntimeDetector({platform:'win32',env:{PATH:'C:\\tools',PATHEXT:'.EXE;.CMD'},which:command=>command==='php'?'C:\\tools\\php.exe':command==='pnpm'?'C:\\tools\\pnpm.cmd':undefined});
+  const root=mkdtempSync(join(tmpdir(),'orquestradoria-php-'));
+  try{writeFileSync(join(root,'index.php'),'<?php echo "ok";');const profile=detector.detect(root);assert.equal(profile.type,'php');assert.equal(profile.command?.executable,'C:\\tools\\php.exe');}finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('browser QA records same-origin HTTP failures and applies the external resource policy',async()=>{
+  const handlers:Record<string,Function>={};const listeners:Record<string,Function[]>={};
+  const page:any={on:(name:string,handler:Function)=>(listeners[name]??=[]).push(handler),url:()=> 'http://127.0.0.1:12345/',goto:async()=>{for(const handler of listeners.response||[])handler({status:()=>404,url:()=>'http://127.0.0.1:12345/js/app.js'});for(const handler of listeners.response||[])handler({status:()=>404,url:()=>'http://127.0.0.1:12345/favicon.ico'});return{status:()=>200}},waitForTimeout:async()=>{},screenshot:async()=>{},close:async()=>{}};
+  const context:any={route:async(_pattern:string,handler:Function)=>{handlers.route=handler},newPage:async()=>page,close:async()=>{}};
+  const launcher:any={launch:async()=>({newContext:async()=>context,close:async()=>{}})};
+  const result=await new BrowserQaRunner(launcher).run({baseUrl:'http://127.0.0.1:12345',routes:['/'],screenshotDir:mkdtempSync(join(tmpdir(),'orquestradoria-network-'))});
+  assert.equal(result.status,'FAILED');
+  assert.deepEqual(result.routes[0].errors.find((error:any)=>error.type==='http_response'),{type:'http_response',message:'HTTP 404',url:'http://127.0.0.1:12345/js/app.js',status:404});
+  const request=(url:string,navigation=false)=>({url:()=>url,isNavigationRequest:()=>navigation});
+  const route=(url:string,navigation=false)=>({request:()=>request(url,navigation),continue:()=>undefined,abort:(reason:string)=>reason});
+  assert.equal(await handlers.route(route('https://unpkg.com/leaflet.js')),undefined);
+  assert.equal(await handlers.route(route('http://example.com/x')),'blockedbyclient');
+  assert.equal(await handlers.route(route('https://127.0.0.1/x')),'blockedbyclient');
+  assert.equal(await handlers.route(route('https://example.com/',true)),'blockedbyclient');
+});
