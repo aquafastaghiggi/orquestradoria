@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {extractExplicitAcceptanceCriteria} from '@orchestrator/shared';
-import {verifyAcceptanceCoverage} from '@orchestrator/adapters';
+import {verifyAcceptanceCoverage,validateAcceptanceCoveragePlan} from '@orchestrator/adapters';
 
 test('extracts only explicit acceptance criteria with stable IDs',()=>{
   assert.deepEqual(extractExplicitAcceptanceCriteria('Objetivo\nFazer algo\n\nCritérios de aceite:\n- Tela visível\n2. Salvar dados\n\nValidação:\npnpm test'),[{id:'AC1',text:'Tela visível'},{id:'AC2',text:'Salvar dados'}]);
@@ -21,3 +21,4 @@ test('browser step requires a passed assertion and never accepts click as eviden
   assert.equal(good.status,'PASSED');
 });
 test('no explicit criteria is not required even when policy is enabled',()=>{const result=verifyAcceptanceCoverage({criteria:[],coveragePlan:undefined,testerResult:{}});assert.equal(result.status,'NOT_REQUIRED');});
+test('strict coverage validation stays at the Tester trust boundary',()=>{const criteria=extractExplicitAcceptanceCriteria('Acceptance criteria:\n- Criar item');assert.equal(validateAcceptanceCoveragePlan(criteria,[{criterionId:'AC1',evidence:[{type:'unknown'}]}]).valid,false);assert.equal(validateAcceptanceCoveragePlan(criteria,[{criterionId:'AC9',evidence:[]}]).valid,false);assert.equal(validateAcceptanceCoveragePlan(criteria,[{criterionId:'AC1',evidence:[{type:'browser_step',scenario:'CRUD',step:0}]}]).valid,false);const coverage=verifyAcceptanceCoverage({criteria,coveragePlan:[{criterionId:'AC1',evidence:[{type:'unknown'}]}],testerResult:{}});assert.equal(coverage.errorType,'invalid_acceptance_coverage_plan');assert.equal(coverage.criteria[0].criterionText,'Criar item');});
