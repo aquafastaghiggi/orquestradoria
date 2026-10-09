@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
+import {existsSync,mkdtempSync,readFileSync,symlinkSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {RuntimeDetector,RuntimeSessionManager,prepareRuntimeCommand} from '@orchestrator/workspace';
@@ -94,6 +94,54 @@ test('Windows Vite runtime wraps .cmd executables through cmd.exe without shell 
   assert.deepEqual(invocation.args.slice(0,4),['/d','/c','call','"C:\\tools\\pnpm.cmd"']);
   assert.equal(invocation.shell,false);
   assert.notEqual(invocation.command,'C:\\tools\\pnpm.cmd');
+});
+
+test('PHP preview serves a real isolated worktree when PHP is available', {skip:process.platform==='win32'&&existsSync('C:\\xampp\\php\\php.exe')?false:'PHP/XAMPP is not available in this environment'}, async()=>{
+  const root=mkdtempSync(join(tmpdir(),'orquestradoria-php-runtime-'));
+  try{
+    writeFileSync(join(root,'index.php'),'<?php echo "php-preview-ok";');
+    const detector=new RuntimeDetector({platform:'win32',env:{PATH:''},which:()=>undefined});
+    const profile=detector.detect(root);
+    assert.equal(profile.type,'php');assert.ok(profile.command);
+    const manager=new RuntimeSessionManager(detector,'win32');
+    const session=await manager.start(root,{id:'php-real-preview'});
+    assert.equal(session.status,'ready');assert.equal(session.profile.type,'php');
+    const response=await fetch(session.baseUrl);assert.equal(response.status,200);assert.equal(await response.text(),'php-preview-ok');
+    await manager.stop(session);assert.equal(session.status,'stopped');
+    assert.equal(readFileSync(join(root,'index.php'),'utf8'),'<?php echo "php-preview-ok";');
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('Vite preview uses the detected package manager and serves a real fixture when dependencies are available', {skip:existsSync(join(process.cwd(),'..','..','apps','web','node_modules','vite'))?false:'Vite dependency is not installed in the workspace'}, async()=>{
+  const root=mkdtempSync(join(tmpdir(),'orquestradoria-vite-runtime-'));
+  try{
+    writeFileSync(join(root,'index.html'),'<div id="app">vite-preview-ok</div>');
+    writeFileSync(join(root,'package.json'),JSON.stringify({scripts:{dev:'vite'}}));
+    writeFileSync(join(root,'pnpm-lock.yaml'),'lockfileVersion: 9');
+    symlinkSync(join(process.cwd(),'..','..','apps','web','node_modules'),join(root,'node_modules'),'junction');
+    const detector=new RuntimeDetector();const profile=detector.detect(root);
+    assert.equal(profile.type,'vite');assert.ok(profile.command);assert.match(profile.command!.args.join(' '),/--strictPort/);
+    const manager=new RuntimeSessionManager(detector);
+    const session=await manager.start(root,{id:'vite-real-preview'});
+    assert.equal(session.status,'ready',session.stderr);assert.equal(session.profile.type,'vite');
+    const response=await fetch(session.baseUrl);assert.equal(response.status,200);assert.match(await response.text(),/vite-preview-ok/);
+    await manager.stop(session);assert.equal(session.status,'stopped');
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('runtime session manager prevents duplicate active sessions and permits restart after stop',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'orquestradoria-runtime-session-'));
+  try{
+    writeFileSync(join(root,'index.html'),'<h1>session</h1>');
+    const manager=new RuntimeSessionManager(new RuntimeDetector());
+    const first=await manager.start(root,{id:'same-runtime'});
+    const duplicate=await manager.start(root,{id:'same-runtime'});
+    assert.equal(duplicate,first);
+    await manager.stop(first);
+    const restarted=await manager.start(root,{id:'same-runtime'});
+    assert.notEqual(restarted,first);assert.equal(restarted.status,'ready');
+    await manager.stop(restarted);
+  }finally{rmSync(root,{recursive:true,force:true});}
 });
 
 test('Tester summaries reflect command and browser states',()=>{
