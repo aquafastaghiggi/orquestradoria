@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {RuntimeDetector,RuntimeSessionManager,prepareRuntimeCommand} from '@orchestrator/workspace';
 import {BrowserQaRunner,BrowserScenarioRunner,CommandTesterAdapter,buildTesterSummary,browserPlan,locatorFor,smokeRoutes,validateBrowserScenarios} from '@orchestrator/adapters';
+import {testerIssues} from '@orchestrator/core';
 import {validateClaudeDeveloperResult} from '@orchestrator/adapters';
 
 test('runtime detector serves static workspaces and stops safely',async()=>{
@@ -148,4 +149,32 @@ test('interactive runner uses allowlisted page APIs and records a failed asserti
   const context:any={newPage:async()=>page,route:async()=>{},close:async()=>{}};
   const results=await new BrowserScenarioRunner().run(context,[{name:'Falha',route:'/',steps:[{action:'expectText',target:{label:'Nome'},text:'esperado'}]}],{baseUrl:'http://127.0.0.1:4000',screenshotDir:'storage/local/browser-qa/test-scenario',onEvent:type=>events.push(type)});
   assert.equal(results[0].status,'FAILED');assert.ok(results[0].screenshots.length>=1);assert.ok(screenshotPaths.length>=1);assert.ok(events.includes('browser_qa.step_failed'));
+});
+
+test('interactive runner classifies expected and unexpected dialog outcomes',async()=>{
+  const listeners=new Map<string,Function[]>();
+  const dialog=(message:string)=>({message:()=>message,accept:async()=>{},dismiss:async()=>{}});
+  const locator={click:async()=>{for(const handler of listeners.get('dialog')||[])handler(dialog('Excluir item?'));},fill:async()=>{},textContent:async()=>'',waitFor:async()=>{},inputValue:async()=>'',count:async()=>0,selectOption:async()=>{},check:async()=>{},uncheck:async()=>{},press:async()=>{}};
+  const page:any={goto:async()=>({status:()=>200}),url:()=> 'http://127.0.0.1:4000/',on:(type:string,handler:Function)=>{listeners.set(type,[...(listeners.get(type)||[]),handler]);},once:(type:string,handler:Function)=>{listeners.set(type,[...(listeners.get(type)||[]),handler]);},off:(type:string,handler:Function)=>{listeners.set(type,(listeners.get(type)||[]).filter(item=>item!==handler));},getByRole:()=>locator,screenshot:async()=>{},waitForTimeout:async()=>{},close:async()=>{}};
+  const context:any={newPage:async()=>page,route:async()=>{},close:async()=>{}};
+  const root=mkdtempSync(join(tmpdir(),'orquestradoria-dialog-'));
+  try{
+    const accepted=await new BrowserScenarioRunner().run(context,[{name:'Aceitar',route:'/',steps:[{action:'click',target:{role:'button',name:'Excluir'},dialog:{action:'accept',messageIncludes:'Excluir'}}]}],{baseUrl:'http://127.0.0.1:4000',screenshotDir:root});
+    assert.equal(accepted[0].status,'PASSED');
+    const missingPage={...page,getByRole:()=>({...locator,click:async()=>{}})};
+    const missingContext={...context,newPage:async()=>missingPage};
+    const missing=await new BrowserScenarioRunner().run(missingContext,[{name:'Ausente',route:'/',steps:[{action:'click',target:{role:'button',name:'Excluir'},dialog:{action:'dismiss'}}]}],{baseUrl:'http://127.0.0.1:4000',screenshotDir:root});
+    assert.equal(missing[0].steps[0].errorType,'expected_dialog_missing');
+    const mismatchPage={...page,getByRole:()=>({...locator,click:async()=>{for(const handler of listeners.get('dialog')||[])handler(dialog('Outro texto'));}})};
+    const mismatch=await new BrowserScenarioRunner().run({...context,newPage:async()=>mismatchPage},[{name:'Divergente',route:'/',steps:[{action:'click',target:{role:'button',name:'Excluir'},dialog:{action:'accept',messageIncludes:'Excluir'}}]}],{baseUrl:'http://127.0.0.1:4000',screenshotDir:root});
+    assert.equal(mismatch[0].steps[0].errorType,'dialog_message_mismatch');
+    const unexpectedPage={...page,getByRole:()=>({...locator,click:async()=>{for(const handler of listeners.get('dialog')||[])handler(dialog('Inesperado'));}})};
+    const unexpected=await new BrowserScenarioRunner().run({...context,newPage:async()=>unexpectedPage},[{name:'Inesperado',route:'/',steps:[{action:'click',target:{role:'button',name:'Excluir'}}]}],{baseUrl:'http://127.0.0.1:4000',screenshotDir:root});
+    assert.equal(unexpected[0].steps[0].errorType,'unexpected_dialog');
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('tester issues explain unexpected dialogs without assuming a response',()=>{
+  const issues=testerIssues({structuredResult:{browserQa:{status:'FAILED',scenarios:[{name:'Excluir',status:'FAILED',steps:[{index:0,action:'click',target:{role:'button',name:'Excluir'},status:'FAILED',errorType:'unexpected_dialog',message:'Unexpected dialog appeared'}]}]}}} as any);
+  assert.match(issues[0],/Type: unexpected_dialog/);assert.match(issues[0],/Action: click/);assert.match(issues[0],/Target:/);assert.match(issues[0],/declare dialog\.action on the click step/);assert.doesNotMatch(issues[0],/accept|dismiss/);
 });
