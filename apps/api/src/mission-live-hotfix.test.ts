@@ -11,6 +11,25 @@ test('Claude Developer accepts one JSON fence in a textual preamble and rejects 
   assert.throws(()=>parseClaudeStructuredText(fence+'json\n'+JSON.stringify(value)+'\n'+fence+'\n'+fence+'json\n'+JSON.stringify(value)+'\n'+fence),error=>{assert.equal((error as any).kind,'validation_error');return true;});
 });
 
+test('Claude Developer recovers balanced embedded JSON without confusing nested braces',()=>{
+  const value={status:'COMPLETED',summary:'value with { braces } and escaped \\"quotes\\"',filesChanged:[],testsRun:[],notes:[],nested:{items:[{ok:true}]}};
+  assert.deepEqual(parseClaudeStructuredText('Resultado final:\n'+JSON.stringify(value)+'\nPronto.'),value);
+  assert.deepEqual(parseClaudeStructuredText('```json\n'+JSON.stringify(value)+'\n```'),value);
+  assert.throws(()=>parseClaudeStructuredText('{"status":"COMPLETED",}'),/not valid JSON/);
+});
+
+test('Claude Developer resolves one auxiliary object plus one developer object safely',()=>{
+  const value={status:'COMPLETED',summary:'ok',filesChanged:[],testsRun:[],notes:[]};
+  assert.deepEqual(parseClaudeStructuredText('Metadata: {"requestId":"safe"}\nResult: '+JSON.stringify(value)),value);
+  assert.throws(()=>parseClaudeStructuredText(JSON.stringify(value)+'\n'+JSON.stringify({...value,summary:'second'})),/multiple developer JSON candidates/);
+});
+
+test('Claude Developer recursively parses result and content envelopes with noisy text',()=>{
+  const value={status:'COMPLETED',summary:'ok',filesChanged:[],testsRun:[],notes:[]};
+  assert.deepEqual(parseClaudeStructuredText(JSON.stringify({type:'result',result:'texto '+JSON.stringify(value)})),value);
+  assert.deepEqual(parseClaudeStructuredText(JSON.stringify({content:[{type:'text',text:'parte 1 '},{type:'text',text:JSON.stringify(value)}]})),value);
+});
+
 test('mission detail refreshes from mission SSE events and exposes current execution data',()=>{
   const main=readFileSync(new URL('../../web/src/main.tsx',import.meta.url),'utf8');
   assert.match(main,/mission\.started/);
@@ -31,4 +50,13 @@ test('developer validation failures are audited with bounded safe diagnostics',(
   assert.match(server,/stdoutLength/);
   assert.match(server,/slice\(0,500\)/);
   assert.match(server,/preview/);
+  assert.match(server,/developer\.structured_output_recovered/);
+});
+
+test('task overview neutralizes invalidated historical approval while preserving real approval',()=>{
+  const main=readFileSync(new URL('../../web/src/main.tsx',import.meta.url),'utf8');
+  assert.match(main,/historicalReviewInvalid/);
+  assert.match(main,/Revisão anterior invalidada/);
+  assert.match(main,/retomada necessária/);
+  assert.match(main,/review\.status==='APPROVED'/s);
 });
