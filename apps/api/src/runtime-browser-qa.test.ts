@@ -144,6 +144,22 @@ test('runtime session manager prevents duplicate active sessions and permits res
   }finally{rmSync(root,{recursive:true,force:true});}
 });
 
+test('runtime readiness failure remains retryable after resources are released',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'orquestradoria-runtime-failure-'));let failing=true;
+  try{
+    writeFileSync(join(root,'index.html'),'<h1>retry</h1>');
+    const detector:any={detect:(cwd:string)=>failing?{type:'vite',command:{executable:process.execPath,args:['-e','process.exit(1)'],cwd}}:{type:'static'}};
+    const manager=new RuntimeSessionManager(detector);
+    const failed=await manager.start(root,{id:'retry-runtime'});
+    assert.equal(failed.status,'failed');assert.match(failed.stderr,/Runtime process exited|readiness/);
+    await manager.stop(failed);assert.equal(failed.status,'stopped');
+    failing=false;
+    const recovered=await manager.start(root,{id:'retry-runtime'});
+    assert.equal(recovered.status,'ready');assert.equal((await fetch(recovered.baseUrl)).status,200);
+    await manager.stop(recovered);
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
 test('Tester summaries reflect command and browser states',()=>{
   assert.equal(buildTesterSummary('PASSED','PASSED'),'Command QA and browser smoke QA passed');
   assert.equal(buildTesterSummary('BLOCKED','PASSED','PASSED'),'Command QA unavailable; browser smoke QA passed');

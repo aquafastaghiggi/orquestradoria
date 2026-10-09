@@ -11,6 +11,8 @@ Branch: `feat/live-preview-5-3-2`
 - `.cmd` continua sendo executado por `cmd.exe /d /c call`, sem `shell:true`.
 - Dependências ausentes não acionam instalação automática; o diagnóstico informa o gerenciador ausente.
 - Cada task possui uma sessão ativa; Stop libera a sessão e permite reinício.
+- O runtime Static não exige executável externo; PHP e Vite exigem um comando detectado e disponível.
+- O endpoint preserva `starting` enquanto a sessão está sendo inicializada; falhas de readiness permanecem observáveis como `error/failed` depois da limpeza dos recursos.
 - Processos dinâmicos recebem somente variáveis de ambiente de runtime, sem segredos arbitrários.
 - A UI mostra runtime, estado, porta, URL, erro e confirmação explícita sobre acesso potencial a APIs/bancos antes de PHP/Vite.
 
@@ -19,6 +21,8 @@ Branch: `feat/live-preview-5-3-2`
 - Fixture Static: HTTP 200, conteúdo correto, Stop/Restart e arquivo original preservado.
 - Fixture PHP real: PHP 8.x/XAMPP, HTTP 200, conteúdo PHP renderizado, encerramento e arquivo preservado.
 - Fixture Vite real: `pnpm run dev`, HTTP 200, `--strictPort`, encerramento correto.
+- API de Preview com banco temporário: Static, PHP e Vite foram iniciados por HTTP, retornaram URL disponível e HTTP 200, e foram encerrados sem alterar os fixtures.
+- Falha de readiness: estado `failed` e diagnóstico preservados após o encerramento do processo; retry em uma sessão limpa retorna `ready`.
 - Sessão duplicada: mesmo id reutiliza a sessão ativa; após Stop o mesmo id pode reiniciar.
 - Windows `.cmd`: invocação validada via `cmd.exe`, sem shell mode.
 - Browser QA: testes existentes continuam passando e não compartilham a sessão do Preview.
@@ -27,7 +31,7 @@ Validação final registrada após implementação:
 
 - `pnpm build`: aprovado.
 - `pnpm typecheck`: aprovado.
-- `pnpm test`: 239/239 aprovados, 0 falhas.
+- `pnpm test`: 242/242 aprovados, 0 falhas.
 - `git diff --check`: aprovado após a revisão final.
 
 ## Limitações e riscos

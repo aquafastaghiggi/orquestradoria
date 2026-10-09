@@ -1,0 +1,51 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {spawn,ChildProcess} from 'node:child_process';
+import {createRequire} from 'node:module';
+import {existsSync,mkdtempSync,readFileSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import Database from 'better-sqlite3';
+
+async function waitForApi(port:number){
+  for(let attempt=0;attempt<60;attempt++){
+    try{const response=await fetch(`http://127.0.0.1:${port}/api/providers`);if(response.ok)return; }catch{}
+    await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  throw new Error('API test server did not become ready');
+}
+
+async function waitForPreview(baseUrl:string,taskId:string){
+  for(let attempt=0;attempt<80;attempt++){
+    const response=await fetch(`${baseUrl}/api/tasks/${taskId}/preview`);const value:any=await response.json();
+    if(value.status!=='starting')return value;
+    await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  throw new Error('Preview did not leave starting state');
+}
+
+test('Preview API starts Static without command and serves its isolated worktree',async()=>{
+  const directory=mkdtempSync(join(tmpdir(),'orquestradoria-preview-api-'));const dbPath=join(directory,'preview.db');const workspaceRoot=join(directory,'workspace');const worktree=join(directory,'static-worktree');const port=43200+(process.pid%400);let child:ChildProcess|undefined;
+  try{
+    const {mkdirSync}=await import('node:fs');mkdirSync(workspaceRoot);mkdirSync(worktree);writeFileSync(join(worktree,'index.html'),'<h1>api-static-preview</h1>');
+    const cli=createRequire(import.meta.url).resolve('tsx/cli');child=spawn(process.execPath,[cli,'src/server.ts'],{cwd:process.cwd(),env:{...process.env,DB_PATH:dbPath,PORT:String(port)},stdio:'ignore'});await waitForApi(port);const baseUrl=`http://127.0.0.1:${port}`;
+    const workspace:any=await (await fetch(`${baseUrl}/api/workspaces`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'preview-test',location:workspaceRoot,branch:'main'})})).json();
+    const task:any=await (await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({title:'Static preview',description:'preview'})})).json();
+    const db=new Database(dbPath);db.prepare("UPDATE tasks SET isolationMode='worktree',environmentStatus='active',baseBranch='main',baseCommitSha='test',taskBranch='task/static-preview',worktreePath=? WHERE id=?").run(worktree,task.id);db.close();
+    const initial:any=await (await fetch(`${baseUrl}/api/tasks/${task.id}/preview`)).json();assert.equal(initial.runtime,'static');assert.equal(initial.status,'stopped');
+    const start=await fetch(`${baseUrl}/api/tasks/${task.id}/preview/start`,{method:'POST'});await start.json();assert.equal(start.status,202);const ready:any=await waitForPreview(baseUrl,task.id);assert.equal(ready.status,'available');assert.ok(ready.url);assert.equal((await fetch(ready.url)).status,200);assert.match(await (await fetch(ready.url)).text(),/api-static-preview/);
+    const stopped:any=await (await fetch(`${baseUrl}/api/tasks/${task.id}/preview/stop`,{method:'POST'})).json();assert.equal(stopped.status,'stopped');assert.equal(readFileSync(join(worktree,'index.html'),'utf8'),'<h1>api-static-preview</h1>');
+  }finally{child?.kill();rmSync(directory,{recursive:true,force:true});}
+});
+
+test('Preview API starts real PHP and Vite fixtures when available',async()=>{
+  const phpAvailable=process.platform==='win32'&&existsSync('C:\\xampp\\php\\php.exe');const viteAvailable=existsSync(join(process.cwd(),'..','..','apps','web','node_modules','vite'));
+  if(!phpAvailable||!viteAvailable){assert.ok(true,`PHP available=${phpAvailable}, Vite available=${viteAvailable}`);return;}
+  const directory=mkdtempSync(join(tmpdir(),'orquestradoria-preview-dynamic-api-'));const dbPath=join(directory,'preview.db');const workspaceRoot=join(directory,'workspace');const phpWorktree=join(directory,'php-worktree');const viteWorktree=join(directory,'vite-worktree');const port=43600+(process.pid%300);let child:ChildProcess|undefined;
+  try{
+    const {mkdirSync}=await import('node:fs');mkdirSync(workspaceRoot);mkdirSync(phpWorktree);mkdirSync(viteWorktree);writeFileSync(join(phpWorktree,'index.php'),'<?php echo "api-php-preview";');writeFileSync(join(viteWorktree,'index.html'),'<div>api-vite-preview</div>');writeFileSync(join(viteWorktree,'package.json'),JSON.stringify({scripts:{dev:'vite'}}));writeFileSync(join(viteWorktree,'pnpm-lock.yaml'),'lockfileVersion: 9');symlinkSync(join(process.cwd(),'..','..','apps','web','node_modules'),join(viteWorktree,'node_modules'),'junction');
+    const cli=createRequire(import.meta.url).resolve('tsx/cli');child=spawn(process.execPath,[cli,'src/server.ts'],{cwd:process.cwd(),env:{...process.env,DB_PATH:dbPath,PORT:String(port)},stdio:'ignore'});await waitForApi(port);const baseUrl=`http://127.0.0.1:${port}`;const workspace:any=await (await fetch(`${baseUrl}/api/workspaces`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'dynamic-preview-test',location:workspaceRoot,branch:'main'})})).json();
+    const makeTask=async(worktree:string,title:string)=>{const task:any=await (await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({title,description:'preview'})})).json();const db=new Database(dbPath);db.prepare("UPDATE tasks SET isolationMode='worktree',environmentStatus='active',baseBranch='main',baseCommitSha='test',taskBranch=?,worktreePath=? WHERE id=?").run(`task/${title.toLowerCase().replace(/[^a-z]+/g,'-')}`,worktree,task.id);db.close();return task.id;};
+    for(const [worktree,title,expected] of [[phpWorktree,'PHP preview',/api-php-preview/],[viteWorktree,'Vite preview',/api-vite-preview/]] as const){const taskId=await makeTask(worktree,title);const start=await fetch(`${baseUrl}/api/tasks/${taskId}/preview/start`,{method:'POST'});assert.equal(start.status,202);const ready:any=await waitForPreview(baseUrl,taskId);assert.equal(ready.status,'available');assert.ok(ready.url);assert.equal((await fetch(ready.url)).status,200);assert.match(await (await fetch(ready.url)).text(),expected);const stopped:any=await (await fetch(`${baseUrl}/api/tasks/${taskId}/preview/stop`,{method:'POST'})).json();assert.equal(stopped.status,'stopped');}
+  }finally{child?.kill();rmSync(directory,{recursive:true,force:true});}
+});
