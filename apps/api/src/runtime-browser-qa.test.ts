@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {RuntimeDetector,RuntimeSessionManager,prepareRuntimeCommand} from '@orchestrator/workspace';
@@ -12,16 +12,28 @@ test('runtime detector serves static workspaces and stops safely',async()=>{
   const root=mkdtempSync(join(tmpdir(),'orquestradoria-runtime-'));
   try{
     writeFileSync(join(root,'index.html'),'<h1>runtime</h1>');
+    const before=readFileSync(join(root,'index.html'),'utf8');
     writeFileSync(join(root,'extra.html'),'<h1>extra</h1>');
     const detector=new RuntimeDetector({platform:'linux',env:{PATH:''},which:()=>undefined});
     assert.deepEqual(detector.detect(root),{type:'static'});
     const manager=new RuntimeSessionManager(detector);
-    const session=await manager.start(root,{id:'test-runtime'});
+    const first=manager.start(root,{id:'test-runtime'});
+    const second=manager.start(root,{id:'test-runtime-duplicate'});
+    const session=await first;
+    const duplicate=await second;
     assert.equal(session.status,'ready');
+    assert.equal(duplicate.status,'ready');
     assert.equal((await fetch(session.baseUrl)).status,200);
+    assert.equal(await (await fetch(session.baseUrl)).text(),'<h1>runtime</h1>');
     assert.equal((await fetch(`${session.baseUrl}/../package.json`)).status,404);
     await manager.stop(session);
     assert.equal(session.status,'stopped');
+    await manager.stop(duplicate);
+    const restarted=await manager.start(root,{id:'test-runtime-restart'});
+    assert.equal(restarted.status,'ready');
+    assert.equal(await (await fetch(restarted.baseUrl)).text(),'<h1>runtime</h1>');
+    await manager.stop(restarted);
+    assert.equal(readFileSync(join(root,'index.html'),'utf8'),before);
   }finally{rmSync(root,{recursive:true,force:true});}
 });
 

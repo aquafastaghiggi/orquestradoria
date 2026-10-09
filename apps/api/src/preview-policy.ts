@@ -1,0 +1,4 @@
+import {existsSync} from 'node:fs';
+import {resolve} from 'node:path';
+
+export function previewEligibility(task:any,workspace:any){if(!workspace)return'Workspace não encontrado.';if(task.missionId)return'Preview de Missions será disponibilizado em uma etapa posterior.';if(['applied','discarded'].includes(String(task.environmentStatus||''))||['applied','discarded'].includes(String(task.status||'')))return'Esta task não pode mais ser visualizada porque seu ambiente foi finalizado.';if(['analyzing','planning','implementing','testing','reviewing','running'].includes(String(task.status||'')))return'Não é possível iniciar preview enquanto a task está em execução.';if(task.isolationMode!=='worktree'||!task.taskBranch||!task.worktreePath||!existsSync(task.worktreePath))return'Esta task não possui um worktree isolado válido.';if(resolve(task.worktreePath)===resolve(workspace.location))return'Preview bloqueado: o worktree não é isolado do workspace principal.';return null;}
