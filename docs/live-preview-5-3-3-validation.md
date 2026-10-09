@@ -14,10 +14,10 @@ Branch: `feat/live-preview-5-3-3`
 
 - `pnpm --filter @orchestrator/web build`: aprovado.
 - `pnpm --filter @orchestrator/web typecheck`: aprovado.
-- `pnpm --filter @orchestrator/api exec tsx --test src/server.test.ts`: 124/124 aprovados.
+- `pnpm --filter @orchestrator/api exec tsx --test src/server.test.ts`: 126/126 aprovados.
 - `pnpm build`: aprovado.
 - `pnpm typecheck`: aprovado.
-- `pnpm test`: primeira execução teve 242/243 aprovados e a segunda 241/243, com falhas transitórias em testes de provider/infraestrutura; o teste isolado de health passou 1/1. A terceira execução passou 243/243, 0 falhas, 0 skipped.
+- `pnpm test`: uma execução teve 244/245 por falha transitória no health de providers; a execução final passou 245/245, 0 falhas, 0 skipped.
 - `git diff --check`: aprovado.
 
 Não foram executados Claude, Codex ou providers reais. Não foram executados Apply, Discard, deploy ou Browser QA real nesta implementação.
@@ -26,6 +26,10 @@ Não foram executados Claude, Codex ou providers reais. Não foram executados Ap
 
 - A visualização incorporada do Preview não foi adicionada; a ação segura `Abrir no navegador` continua disponível.
 - O diff por arquivo é uma seleção visual sobre o diff completo retornado pelo isolamento existente; não foi criado um editor de código.
+- Na aba `Revisão`, o Preview fica dentro da coluna esquerda e não é duplicado; fora dela, o painel preserva a posição original.
+- Screenshots novos usam `taskId/executionId`, e a API valida a relação task/execução, nome basename e caminho resolvido. A rota legada permanece somente para leitura compatível.
+- O painel identifica evidências como execução atual ou legada e neutraliza Reviewer antigo quando há Developer/Tester posterior, exibindo `Revisão anterior desatualizada` ou `Aguardando nova validação`.
+- A seleção de diff compara o cabeçalho completo `diff --git a/<path> b/<path>`, evitando colisões entre nomes semelhantes.
 - Após reinício da API, não há recuperação automática de processos Preview, conforme o escopo da fase.
 
 ## Homologação manual
