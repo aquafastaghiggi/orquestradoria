@@ -40,3 +40,16 @@ test('new Codex reviewer prompts request Portuguese human-readable text and pres
   assert.match(codex, /Brazilian Portuguese \(pt-BR\)/);
   assert.match(codex, /APPROVED or NEEDS_FIX/);
 });
+
+test('task config shows all frozen browser and acceptance policies with historical defaults', () => {
+  const main = source('../../web/src/main.tsx');
+
+  assert.match(main, /Cobertura de critérios de aceite/);
+  assert.match(main, /QA no navegador/);
+  assert.match(main, /QA interativo no navegador/);
+  assert.match(main, /Bloquear se QA no navegador não puder ser executado/);
+  assert.match(main, /acceptanceCoverageRequired=policy\.acceptanceCoverageRequired\?\?false/);
+  assert.match(main, /browserQaEnabled=policy\.browserQaEnabled\?\?false/);
+  assert.match(main, /browserQaInteractiveEnabled=policy\.browserQaInteractiveEnabled\?\?false/);
+  assert.match(main, /browserQaRequired=policy\.browserQaRequired\?\?false/);
+});
