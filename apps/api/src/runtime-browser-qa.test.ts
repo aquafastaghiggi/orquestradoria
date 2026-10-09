@@ -151,6 +151,43 @@ test('interactive runner uses allowlisted page APIs and records a failed asserti
   assert.equal(results[0].status,'FAILED');assert.ok(results[0].screenshots.length>=1);assert.ok(screenshotPaths.length>=1);assert.ok(events.includes('browser_qa.step_failed'));
 });
 
+test('interactive runner preserves factual assertion metadata without fill values',async()=>{
+  const run=async(step:any,options:any={})=>{
+    const listeners=new Map<string,Function[]>();
+    const dialog=(message:string)=>({message:()=>message,accept:async()=>{},dismiss:async()=>{}});
+    const locator={
+      fill:async()=>{},
+      click:async()=>{for(const handler of listeners.get('dialog')||[])handler(dialog('Excluir item?'));},
+      textContent:async()=>options.text??'POI QA Editado',
+      waitFor:async()=>{},
+      inputValue:async()=>options.value??'valor esperado',
+      count:async()=>options.count??0,
+      selectOption:async()=>{},check:async()=>{},uncheck:async()=>{},press:async()=>{}
+    };
+    const page:any={goto:async()=>({status:()=>200}),url:()=> 'http://127.0.0.1:4000/',on:(type:string,handler:Function)=>{listeners.set(type,[...(listeners.get(type)||[]),handler]);},once:(type:string,handler:Function)=>{listeners.set(type,[...(listeners.get(type)||[]),handler]);},off:(type:string,handler:Function)=>{listeners.set(type,(listeners.get(type)||[]).filter(item=>item!==handler));},getByRole:()=>locator,getByLabel:()=>locator,locator:()=>locator,screenshot:async()=>{},waitForTimeout:async()=>{},close:async()=>{}};
+    const context:any={newPage:async()=>page,route:async()=>{},close:async()=>{}};
+    const root=mkdtempSync(join(tmpdir(),'orquestradoria-step-evidence-'));
+    try{
+      const results=await new BrowserScenarioRunner().run(context,[{name:'Evidence',route:'/',steps:[step]}],{baseUrl:'http://127.0.0.1:4000',screenshotDir:root});
+      return results[0].steps[0];
+    }finally{rmSync(root,{recursive:true,force:true});}
+  };
+  const countOne=await run({action:'expectCount',target:{role:'row',name:'POI QA Automatizado'},count:1},{count:1});
+  assert.equal(countOne.status,'PASSED');assert.equal(countOne.count,1);
+  const countZero=await run({action:'expectCount',target:{role:'row',name:'POI QA Automatizado'},count:0},{count:0});
+  assert.equal(countZero.count,0);
+  const text=await run({action:'expectText',target:{role:'row',name:'POI QA Automatizado'},text:'POI QA Editado'},{text:'POI QA Editado'});
+  assert.equal(text.text,'POI QA Editado');
+  const value=await run({action:'expectValue',target:{label:'Nome'},value:'valor esperado'},{value:'valor esperado'});
+  assert.equal(value.value,'valor esperado');
+  const fill=await run({action:'fill',target:{label:'Nome'},value:'segredo'});
+  assert.equal(fill.value,undefined);
+  const click=await run({action:'click',target:{role:'button',name:'Excluir'},dialog:{action:'accept',messageIncludes:'Excluir'}});
+  assert.deepEqual(click.dialog,{action:'accept',messageIncludes:'Excluir'});
+  const failed=await run({action:'expectCount',target:{role:'row',name:'POI QA Automatizado'},count:1},{count:0});
+  assert.equal(failed.status,'FAILED');assert.equal(failed.count,1);
+});
+
 test('interactive runner classifies expected and unexpected dialog outcomes',async()=>{
   const listeners=new Map<string,Function[]>();
   const dialog=(message:string)=>({message:()=>message,accept:async()=>{},dismiss:async()=>{}});
