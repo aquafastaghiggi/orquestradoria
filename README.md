@@ -121,3 +121,7 @@ pnpm exec playwright install chromium
 Quando `browserQaInteractiveEnabled` está ativo, o Developer pode propor até cinco cenários estruturados para o Tester. O Tester valida a DSL allowlist e executa somente ações de navegação, preenchimento, clique, seleção, teclado, assertions e screenshots em um BrowserContext isolado. O plano é salvo como `browser_qa_plan`; o relatório e as evidências ficam em `storage/local/browser-qa/<taskId>` e não no worktree.
 
 Interactive QA não executa JavaScript arbitrário, `page.evaluate`, XPath ou URLs externas. Requisições same-origin `POST`, `PUT`, `PATCH` e `DELETE` são bloqueadas por padrão; `GET`, `HEAD` e `OPTIONS` continuam permitidos. O storage do navegador é efêmero e cada cenário recebe um novo contexto. Falhas estruturadas retornam ao Auto-Fix pelo Tester, incluindo cenário, passo, ação, mensagem e screenshot.
+
+### Acceptance Criteria Coverage
+
+Critérios de aceite somente são considerados quando aparecem explicitamente sob `Critérios de aceite:`, `Criterios de aceite:` ou `Acceptance criteria:`. O Developer pode propor um `acceptanceCoveragePlan`, mas o Tester confirma cada evidência contra os resultados reais de Command QA, Browser QA e mudanças do workspace. A política `acceptanceCoverageRequired` é desativada por padrão e, quando ativada, impede aprovação segura se algum critério explícito estiver descoberto ou sem evidência válida.

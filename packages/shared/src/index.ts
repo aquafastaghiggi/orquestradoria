@@ -1,7 +1,7 @@
 export type WorkspaceType = 'local'|'git'|'ssh';export type WorkspaceStatus = 'active'|'paused'|'archived';
 export type TaskStatus = 'pending'|'analyzing'|'planning'|'implementing'|'testing'|'reviewing'|'needs_fix'|'needs_manual_review'|'approved'|'human_review_required'|'cancelled'|'failed'|'stalled';
 export type ExecutionStatus = 'queued'|'running'|'completed'|'failed'|'cancelled'|'timed_out'|'stalled';export type AgentRole='analyst'|'planner'|'developer'|'tester'|'reviewer';
-export type FailureKind='provider_error'|'timeout'|'validation_error'|'configuration_error'|'cli_invocation_error'|'authentication_error'|'review_rejected'|'cancelled'|'budget_exceeded'|'pipeline_incomplete';export type ArtifactType='plan'|'implementation_summary'|'diff'|'review'|'test_report'|'browser_qa_report'|'browser_qa_plan'|'log'|'generated_file'|'context_snapshot'|'workspace_baseline'|'context_manifest';
+export type FailureKind='provider_error'|'timeout'|'validation_error'|'configuration_error'|'cli_invocation_error'|'authentication_error'|'review_rejected'|'cancelled'|'budget_exceeded'|'pipeline_incomplete'|'acceptance_coverage_incomplete';export type ArtifactType='plan'|'implementation_summary'|'diff'|'review'|'test_report'|'browser_qa_report'|'browser_qa_plan'|'acceptance_criteria'|'acceptance_coverage_plan'|'acceptance_coverage'|'log'|'generated_file'|'context_snapshot'|'workspace_baseline'|'context_manifest';
 export type BrowserScenarioAction='goto'|'fill'|'click'|'selectOption'|'check'|'uncheck'|'press'|'reload'|'waitForVisible'|'expectVisible'|'expectHidden'|'expectText'|'expectValue'|'expectCount'|'screenshot'|'clearStorage';
 export const ARIA_ROLES=['alert','alertdialog','application','article','banner','button','cell','checkbox','columnheader','combobox','complementary','contentinfo','dialog','document','figure','form','grid','gridcell','group','heading','img','link','list','listbox','listitem','main','menu','menubar','menuitem','menuitemcheckbox','menuitemradio','navigation','option','progressbar','radio','radiogroup','region','row','rowgroup','rowheader','search','searchbox','separator','slider','spinbutton','status','switch','tab','table','tablist','tabpanel','textbox','toolbar','tooltip','tree','treegrid','treeitem'] as const;
 export type AriaRole=typeof ARIA_ROLES[number];
@@ -40,3 +40,4 @@ export const TASK_STATUSES:TaskStatus[]=['pending','analyzing','planning','imple
 
 export * from './sse.js';
 export * from './provider-registry.js';
+export * from './acceptance.js';
