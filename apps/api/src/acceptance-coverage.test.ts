@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {extractExplicitAcceptanceCriteria} from '@orchestrator/shared';
+import {describeBrowserStep,extractExplicitAcceptanceCriteria} from '@orchestrator/shared';
 import {verifyAcceptanceCoverage,validateAcceptanceCoveragePlan} from '@orchestrator/adapters';
 
 test('extracts only explicit acceptance criteria with stable IDs',()=>{
@@ -22,3 +22,4 @@ test('browser step requires a passed assertion and never accepts click as eviden
 });
 test('no explicit criteria is not required even when policy is enabled',()=>{const result=verifyAcceptanceCoverage({criteria:[],coveragePlan:undefined,testerResult:{}});assert.equal(result.status,'NOT_REQUIRED');});
 test('strict coverage validation stays at the Tester trust boundary',()=>{const criteria=extractExplicitAcceptanceCriteria('Acceptance criteria:\n- Criar item');assert.equal(validateAcceptanceCoveragePlan(criteria,[{criterionId:'AC1',evidence:[{type:'unknown'}]}]).valid,false);assert.equal(validateAcceptanceCoveragePlan(criteria,[{criterionId:'AC9',evidence:[]}]).valid,false);assert.equal(validateAcceptanceCoveragePlan(criteria,[{criterionId:'AC1',evidence:[{type:'browser_step',scenario:'CRUD',step:0}]}]).valid,false);const coverage=verifyAcceptanceCoverage({criteria,coveragePlan:[{criterionId:'AC1',evidence:[{type:'unknown'}]}],testerResult:{}});assert.equal(coverage.errorType,'invalid_acceptance_coverage_plan');assert.equal(coverage.criteria[0].criterionText,'Criar item');});
+test('browser step descriptions expose targets and expectations without fill values',()=>{assert.equal(describeBrowserStep({action:'click',target:{role:'button',name:'Salvar'}}),'click · botão "Salvar"');assert.equal(describeBrowserStep({action:'fill',target:{label:'Nome'},value:'segredo'}),'fill · campo "Nome"');assert.doesNotMatch(describeBrowserStep({action:'fill',target:{label:'Nome'},value:'segredo'}),/segredo/);assert.equal(describeBrowserStep({action:'expectCount',target:{role:'row',name:'POI'},count:0}),'expectCount · row "POI" · contagem esperada 0');assert.equal(describeBrowserStep({action:'expectText',target:{text:'status'},text:'POI QA Editado'}),'expectText · texto "status" · texto "POI QA Editado"');});

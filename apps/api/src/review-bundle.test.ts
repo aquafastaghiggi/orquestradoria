@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,existsSync,writeFileSync} from 'node:fs';
+import {mkdtempSync,existsSync,readFileSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {EventEmitter} from 'node:events';
@@ -10,6 +10,7 @@ import type {ReviewScope,Task} from '@orchestrator/shared';
 import {createReviewBundle,cleanupReviewBundle} from './review-bundle.js';
 
 const task:Task={id:'review-scope-task',workspaceId:'workspace',title:'Create scoped file',description:'Create context-optimization-test.txt',pipeline:['planner','developer','tester','reviewer'],status:'reviewing',resumable:true,taskBudgetUsd:0,tokenBudget:0,configSnapshot:'{}',createdAt:'',updatedAt:''};
+test('ReviewBundle keeps acceptance criteria as individual entries',()=>{const workspace=mkdtempSync(join(tmpdir(),'orchestrator-review-criteria-'));const bundle=createReviewBundle({task,workspaceLocation:workspace,executionId:'criteria',scope:{taskId:task.id,filesAdded:[],filesModified:[],filesDeleted:[],actualFilesChanged:[],preExistingFiles:[],relevantDiff:''},acceptanceCriteria:['[AC1] Criação aprovada.','[AC2] Exclusão aprovada.'],filePaths:[]});const request=readFileSync(bundle.reviewRequestPath,'utf8');assert.match(request,/- \[AC1\] Criação aprovada\./);assert.match(request,/- \[AC2\] Exclusão aprovada\./);cleanupReviewBundle(bundle);});
 const scope:ReviewScope={taskId:task.id,filesAdded:['context-optimization-test.txt'],filesModified:[],filesDeleted:[],actualFilesChanged:['context-optimization-test.txt'],preExistingFiles:Array.from({length:17},(_,i)=>`old-${i}.txt`),relevantDiff:'diff --git a/context-optimization-test.txt b/context-optimization-test.txt\n+ok'};
 const context=(bundle?:any):any=>({task,workspaceContext:{id:'workspace',type:'local',location:bundle?.location||mkdtempSync(join(tmpdir(),'orchestrator-review-workspace-'))},projectRules:[],stage:'reviewer',previousArtifacts:[],constraints:{timeoutSeconds:1,tokenBudget:100,budgetUsd:1},reviewBundle:bundle,stageContext:{prompt:'Review bundle',manifest:{role:'reviewer',includedSections:[],excludedSections:[],filesIncluded:scope.actualFilesChanged,filesOmitted:[],charCount:14,truncated:false},contextChars:14,contextSections:[],contextTruncated:false,contextFilesIncluded:scope.actualFilesChanged,contextFilesOmitted:[],reviewBundle:bundle}});
 function fakeProcess(output:string,code=0){const child:any=new EventEmitter();child.stdout=new EventEmitter();child.stderr=new EventEmitter();child.stdin={end(){if(output)child.stdout.emit('data',Buffer.from(output));child.emit('close',code);}};child.kill=()=>{};return child;}
