@@ -54,3 +54,8 @@ export function extractClaudeUsage(stdout:string):ClaudeUsage|undefined{
   if(cost===undefined&&!input&&!creation&&!output&&!models.length)return undefined;
   return{costUsd:cost,tokenUsage:input+creation+output,inputTokens:input+creation,cachedInputTokens:cached,outputTokens:output,reasoningTokens:reasoning||undefined,numTurns:num(envelope.num_turns)||undefined,models};
 }
+
+/** Converte o uso por modelo no formato que o cálculo de custo entende (mesma regra usada pelo Developer). */
+export function claudeUsageDetails(usage:ClaudeUsage){
+  return usage.models.map(item=>({model:item.model,reportedUsd:item.reportedUsd,costBasis:item.costBasis,breakdown:{inputTokens:item.inputTokens,cacheWrite5mTokens:item.cacheWrite5mTokens,cacheWrite1hTokens:item.cacheWrite1hTokens,cacheReadTokens:item.cacheReadTokens,outputTokens:item.outputTokens,requests:usage.numTurns}}));
+}

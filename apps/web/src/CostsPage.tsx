@@ -16,7 +16,7 @@ export const usd=(value:number|null|undefined)=>{
   const digits=value<0.01?4:value<1?3:2;
   return 'US$ '+value.toLocaleString('pt-BR',{minimumFractionDigits:digits,maximumFractionDigits:digits});
 };
-const ROLE_LABEL:Record<string,string>={planner:'Planner',developer:'Developer',reviewer:'Reviewer'};
+const ROLE_LABEL:Record<string,string>={planner:'Planner',developer:'Developer',reviewer:'Reviewer',tester:'Tester',mission_planner:'Planner de missão',prompt_refiner:'Refinador de prompt'};
 const PROVIDER_LABEL:Record<string,string>={'claude-code':'Claude Code','codex-cli':'Codex CLI',cursor:'Cursor'};
 const VENDOR_OF:Record<string,string>={'claude-code':'anthropic','codex-cli':'openai',cursor:'cursor'};
 const TIER_LABEL:Record<string,string>={economy:'econômico',balanced:'equilibrado',premium:'premium'};
@@ -142,6 +142,7 @@ function RealSpend({workspaces}:{workspaces:Workspace[]}){
       {data.byDay.length>0&&<div className="cost-bars" aria-label="Gasto por dia">{data.byDay.map(item=><div key={item.day} className="bar" title={`${item.day}: ${usd(item.usd)}`}><div style={{height:`${Math.max(4,item.usd/maxDay*100)}%`}}/><small>{item.day.slice(5)}</small></div>)}</div>}
       <div className="cost-split">
         <table className="cost-table"><thead><tr><th>Modelo</th><th>Execuções</th><th>Custo</th></tr></thead><tbody>{data.byModel.map(item=><tr key={item.provider+item.model}><td>{PROVIDER_LABEL[item.provider]||item.provider} · <code>{item.model}</code></td><td>{item.executions}</td><td>{usd(item.usd)}</td></tr>)}{!data.byModel.length&&<tr><td colSpan={3} className="muted">Sem execuções no período.</td></tr>}</tbody></table>
+        <table className="cost-table"><thead><tr><th>Por papel</th><th>Execuções</th><th>Custo</th></tr></thead><tbody>{data.byRole.map(item=><tr key={item.role}><td>{ROLE_LABEL[item.role]||item.role}</td><td>{item.executions}</td><td>{usd(item.usd)}</td></tr>)}{!data.byRole.length&&<tr><td colSpan={3} className="muted">—</td></tr>}</tbody></table>
         <table className="cost-table"><thead><tr><th>Task mais cara</th><th>Custo</th></tr></thead><tbody>{data.expensive.map(item=><tr key={item.taskId}><td>{item.title}</td><td>{usd(item.usd)}</td></tr>)}{!data.expensive.length&&<tr><td colSpan={2} className="muted">—</td></tr>}</tbody></table>
       </div></>}
   </section>;

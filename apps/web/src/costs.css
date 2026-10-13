@@ -19,3 +19,10 @@
 .cost-bars .bar>div{width:100%;background:#2563eb;border-radius:3px 3px 0 0}
 .cost-bars small{font-size:.65rem;opacity:.6}
 .cost-split{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+
+.cost-hint{border:1px solid rgba(127,127,127,.3);border-radius:10px;padding:10px 12px;margin:10px 0;background:rgba(59,130,246,.06);font-size:.85rem}
+.cost-hint-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.cost-hint p{margin:4px 0}
+.cost-hint ul{margin:4px 0 4px 18px;padding:0}
+.cost-hint-value b{font-size:1.15rem}
+.cost-hint .warn-text{color:#b45309}

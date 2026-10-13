@@ -90,3 +90,21 @@ test('summary aggregates real cost by model, role and day, and counts unknown co
   assert.deepEqual(summary.byDay.map(item=>item.day),['2026-10-10','2026-10-11','2026-10-12']);
   assert.equal(buildCostSummary(db,{days:30,now:new Date('2026-10-13T00:00:00Z')}).totalUsd.toFixed(4),'0.5124');
 });
+
+test('summary also counts Mission Planner and Prompt Refiner usage (ai_usage) by kind, without tying it to a task',()=>{
+  const db=seed();
+  db.exec("CREATE TABLE ai_usage(id TEXT,kind TEXT,workspaceId TEXT,missionId TEXT,provider TEXT,model TEXT,actualModel TEXT,tokenUsage INTEGER,estimatedCost REAL,costSource TEXT,createdAt TEXT)");
+  db.prepare("INSERT INTO tasks VALUES ('t1','w1','Task A')").run();
+  db.prepare("INSERT INTO executions (id,taskId,provider,role,model,actualModel,status,estimatedCost,costSource,tokenUsage,startedAt) VALUES ('1','t1','claude-code','developer','haiku','claude-haiku-5-5','completed',0.02,'computed',1000,'2026-10-12T10:00:00Z')").run();
+  const insert=db.prepare('INSERT INTO ai_usage VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+  insert.run('a','mission_planner','w1','m1','claude-code','sonnet','claude-sonnet-5-5',9000,0.05,'computed','2026-10-12T11:00:00Z');
+  insert.run('b','prompt_refiner','w1',null,'claude-code','haiku','claude-haiku-5-5',2000,0.004,'computed','2026-10-12T12:00:00Z');
+  insert.run('c','prompt_refiner','w2',null,'claude-code','haiku','claude-haiku-5-5',2000,7,'computed','2026-10-12T12:00:00Z');
+  const summary=buildCostSummary(db,{workspaceId:'w1',days:30,now:new Date('2026-10-13T00:00:00Z')});
+  assert.equal(summary.executions,3);
+  assert.ok(Math.abs(summary.totalUsd-0.074)<1e-9);
+  assert.deepEqual(summary.byRole.map(item=>item.role).sort(),['developer','mission_planner','prompt_refiner']);
+  assert.deepEqual(summary.expensive.map(item=>item.taskId),['t1']);
+  // sem a tabela (bancos antigos) o resumo continua funcionando
+  assert.equal(buildCostSummary(seed(),{days:30}).executions,0);
+});

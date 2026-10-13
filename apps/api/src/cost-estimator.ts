@@ -127,6 +127,9 @@ export function buildCostSummary(db:Database.Database,input:{workspaceId?:string
   const now=input.now||new Date();
   const since=new Date(now.getTime()-input.days*86_400_000).toISOString();
   const rows=db.prepare(`SELECT e.taskId,t.title,e.provider,e.role,e.model,e.actualModel,e.estimatedCost,e.costSource,e.tokenUsage,e.startedAt FROM executions e JOIN tasks t ON t.id=e.taskId WHERE e.startedAt>=? ${input.workspaceId?'AND t.workspaceId=?':''} AND e.status='completed'`).all(...(input.workspaceId?[since,input.workspaceId]:[since])) as any[];
+  // Planner de missão e Refinador (fora do pipeline de tasks) ficam em ai_usage.
+  const hasAiUsage=Boolean(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ai_usage'").get());
+  if(hasAiUsage){const extra=db.prepare(`SELECT NULL AS taskId,kind AS title,provider,kind AS role,model,actualModel,estimatedCost,costSource,tokenUsage,createdAt AS startedAt FROM ai_usage WHERE createdAt>=? ${input.workspaceId?'AND workspaceId=?':''}`).all(...(input.workspaceId?[since,input.workspaceId]:[since])) as any[];rows.push(...extra);}
   const summary:CostSummary={since,days:input.days,totalUsd:0,executions:rows.length,unknownCostExecutions:0,mismatchExecutions:0,byModel:[],byRole:[],byDay:[],expensive:[]};
   const model=new Map<string,any>(),role=new Map<string,any>(),day=new Map<string,number>(),task=new Map<string,{title:string;usd:number}>();
   for(const row of rows){
@@ -137,7 +140,7 @@ export function buildCostSummary(db:Database.Database,input:{workspaceId?:string
     const m=model.get(modelKey)||{model:String(row.actualModel||row.model).split(',').pop(),provider:row.provider,usd:0,executions:0,tokens:0};m.usd+=usd;m.executions++;m.tokens+=Number(row.tokenUsage)||0;model.set(modelKey,m);
     const r=role.get(row.role)||{role:row.role,usd:0,executions:0};r.usd+=usd;r.executions++;role.set(row.role,r);
     const d=String(row.startedAt).slice(0,10);day.set(d,(day.get(d)||0)+usd);
-    const t=task.get(row.taskId)||{title:row.title,usd:0};t.usd+=usd;task.set(row.taskId,t);
+    if(row.taskId){const t=task.get(row.taskId)||{title:row.title,usd:0};t.usd+=usd;task.set(row.taskId,t);}
   }
   summary.byModel=[...model.values()].sort((a,b)=>b.usd-a.usd);
   summary.byRole=[...role.values()].sort((a,b)=>b.usd-a.usd);
