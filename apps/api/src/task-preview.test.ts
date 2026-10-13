@@ -1,4 +1,6 @@
 import test from 'node:test';
+import http from 'node:http';
+import net from 'node:net';
 import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -45,4 +47,18 @@ test('preview serves the isolated worktree, is idempotent and stops cleanly',asy
     assert.equal(previews.get('task-1').status,'stopped');
     assert.equal((await previews.start('task-2',join(dir,'missing'))).status,'failed');
   }finally{await previews.stopAll();rmSync(dir,{recursive:true,force:true});}
+});
+
+test('stop closes the port even while a browser keeps a connection open',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'preview-'));
+  const previews=new TaskPreviewManager();
+  const agent=new http.Agent({keepAlive:true});
+  try{
+    writeFileSync(join(dir,'index.html'),'<h1>x</h1>');
+    const started=await previews.start('task-ka',dir);
+    await new Promise<void>(resolve=>http.get(started.url!,{agent},response=>{response.resume();response.on('end',()=>resolve());}));
+    await previews.stop('task-ka');
+    const open=await new Promise<boolean>(resolve=>{const socket=net.connect(Number(new URL(started.url!).port),'127.0.0.1');socket.on('connect',()=>{socket.destroy();resolve(true);});socket.on('error',()=>resolve(false));});
+    assert.equal(open,false);
+  }finally{agent.destroy();await previews.stopAll();rmSync(dir,{recursive:true,force:true});}
 });

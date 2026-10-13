@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 
-type Props={task:{id:string;status:string};environment:any;onRefresh:()=>void;notify:(message:string,tone?:'success'|'error'|'info')=>void};
+type Props={task:{id:string;status:string;configSnapshot?:any};environment:any;onRefresh:()=>void;notify:(message:string,tone?:'success'|'error'|'info')=>void};
 type Preview={status:'stopped'|'ready'|'failed';runtime?:string;url?:string;error?:string};
 
 const PREVIEWABLE=['approved_waiting_action','manual_review_preserved','failed_preserved'];
@@ -30,7 +30,14 @@ export default function TaskPreviewCard({task,environment,onRefresh,notify}:Prop
     }catch(error){notify(error instanceof Error?error.message:'Não foi possível iniciar o preview.','error');}
     finally{setBusy(false);}
   };
-  const stop=async()=>{setBusy(true);try{const{data}=await call(`/api/tasks/${task.id}/preview/stop`);setPreview(data);}finally{setBusy(false);}};
+  const stop=async()=>{
+    setBusy(true);
+    try{const{data}=await call(`/api/tasks/${task.id}/preview/stop`);setPreview(data);notify('Preview parado. A aba aberta deixa de responder.','success');}
+    catch(error){notify(error instanceof Error?error.message:'Não foi possível parar o preview.','error');}
+    finally{setBusy(false);}
+  };
+  const developer=(task.configSnapshot?.agentConfigs||[]).find((config:any)=>config.role==='developer');
+  const simulated=developer?.provider==='mock';
   const requestChanges=async()=>{
     setBusy(true);
     try{
@@ -55,9 +62,11 @@ export default function TaskPreviewCard({task,environment,onRefresh,notify}:Prop
         :<button className="secondary" disabled={busy} onClick={start}>{busy?'Iniciando…':'Abrir preview'}</button>}
     </>}
     {canAdjust&&<>
+      {simulated&&<div className="notice warning"><strong>Developer em modo simulado (mock)</strong><span>Ele não altera arquivos. O ajuste percorre o fluxo, mas o resultado não muda. Para alterações reais, configure o Developer como Claude Code.</span></div>}
       <label htmlFor={`adjust-${task.id}`} className="muted">Solicitar ajuste (volta ao Developer no mesmo worktree)</label>
       <textarea id={`adjust-${task.id}`} rows={4} maxLength={4000} value={feedback} onChange={event=>setFeedback(event.target.value)} placeholder="Ex.: reduza o botão em 20% e altere o texto para Salvar" style={{width:'100%',boxSizing:'border-box'}}/>
       <button className="primary" disabled={busy||!feedback.trim()} onClick={requestChanges}>Solicitar ajuste</button>
+      {!feedback.trim()&&<small className="muted">Descreva o ajuste acima para habilitar o botão.</small>}
     </>}
   </section>;
 }
