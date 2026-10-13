@@ -12,7 +12,8 @@ Custo esperado em modo REAL: **cerca de US$ 0,10 a 0,20** no total. Os limites p
 ## 1. Conferir o custo antes de começar
 - Topo direito: faixa vermelha **REAL · consome créditos**.
 - **Configurações → Limites de gasto**: 2 / 20 / 0,5.
-- **Custos → Recomendação econômica** → "Configuração global" → **Aplicar configuração econômica** (se aparecer). Developer deve ficar em **Claude Haiku 5.5**.
+- **Custos → Recomendação econômica** → escolha **"Configuração global"** → clique em **Aplicar configuração econômica** e confirme. **Não pule este passo**: sem ele o Developer roda em **Claude Sonnet 5.5**, cerca de 10x mais caro (US$ 0,12 a 0,17 por rodada, contra ~US$ 0,015 no Haiku). Depois confira o topo: a faixa deve dizer **Developer: Claude Haiku 5.5** (sem "⚠ caro").
+- A configuração é **congelada quando a missão/task é criada**: mudar depois não afeta o que já existe. Faça este passo **antes** de criar o projeto.
 
 ## 2. Criar o projeto a partir de uma ideia
 **Workspaces → Novo workspace → aba "Novo projeto a partir de uma ideia"**:
@@ -21,7 +22,7 @@ Custo esperado em modo REAL: **cerca de US$ 0,10 a 0,20** no total. Os limites p
 - **Criar projeto** → abre o workspace com a Missão e o botão **Gerar plano**.
 
 ## 3. Missão: plano → aprovar → executar
-1. **Gerar plano** (planner em mock: 3 etapas, sem custo). Veja a estimativa de custo na tela.
+1. **Gerar plano** (agora o planner é o Claude Haiku 5.5, ~US$ 0,01; para um pedido simples deve propor de 1 a 3 etapas). Veja a estimativa de custo na tela e, se o plano vier com muitas etapas, **enxugue antes de aprovar**: cada etapa roda Developer + Reviewer.
 2. **APROVAR PLANO** → confirmar → **INICIAR MISSÃO** → confirmar.
 3. Acompanhe ("Trabalhando", etapas ✓) até **Trabalho concluído** (2–4 min).
 
@@ -51,4 +52,5 @@ Na janela preta: `Ctrl+C` (responda `S`) ou feche a janela.
 | Página em branco / "Desconectado" | Aguarde o build terminar na janela preta e dê F5 |
 | Porta 4000 ou 5173 ocupada | Feche outras janelas do sistema e tente de novo |
 | "Limite diário/mensal atingido" | Configurações → Limites de gasto |
+| Missão parou em "Preciso de você" | Abra a missão e leia a mensagem. Se o Reviewer aprovou na 2ª rodada mas a etapa ficou parada, reinicie o iniciar-real.cmd (a correção repara sozinha) e clique em **RETOMAR MISSÃO** |
 | Developer ou Reviewer falha | Abra a task → Execuções; confirme que `claude` e `codex` estão logados num terminal |

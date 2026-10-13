@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {extractClaudeUsage} from '@orchestrator/adapters';
 import {forceMockSnapshot,isCostlyProvider,isForceMock,summarizeMode} from './run-mode.js';
 
@@ -43,3 +44,9 @@ test('force mock rewrites paid providers in memory and ORQ_FORCE_MOCK enables it
   assert.equal(isForceMock({ORQ_FORCE_MOCK:'1'} as NodeJS.ProcessEnv),true);
   assert.equal(isForceMock({} as NodeJS.ProcessEnv),false);
 });
+
+test('with ORQ_FORCE_MOCK the task object handed to the providers also carries the mocked snapshot',()=>{
+  const source=require_source();
+  assert.ok(source.includes("if(isForceMock())task={...task,configSnapshot:JSON.stringify(snapshot)};"));
+});
+function require_source(){return readFileSync(new URL('./server.ts',import.meta.url),'utf8');}

@@ -52,9 +52,9 @@ export const DEFAULT_PRICING:ModelPrice[]=[
   // ── Anthropic (Claude Code CLI / Messages API) ──
   A('claude-haiku-5-5','Claude Haiku 5.5','economy',0.10,0.125,0.20,0.01,0.50,{longContext:{thresholdTokens:100_000,input:0.50,cacheWrite5m:0.625,cacheWrite1h:1,cacheRead:0.05,output:2.50},verified:true,note:'Mais barato da Anthropic. Prompts acima de 100 mil tokens custam 5x.'}),
   A('claude-haiku-4-5','Claude Haiku 4.5','balanced',1,1.25,2,0.10,5,{aliases:['haiku','claude-haiku-4-5-20251001'],note:'O alias "haiku" do CLI resolveu para este modelo em 2026-10-13 (10x mais caro que o Haiku 5.5).'}),
-  A('claude-sonnet-5-5','Claude Sonnet 5.5','balanced',2,2.5,4,0.10,10),
+  A('claude-sonnet-5-5','Claude Sonnet 5.5','balanced',2,2.5,4,0.10,10,{aliases:['sonnet'],note:'O alias "sonnet" do CLI resolveu para este modelo em 2026-10-13 (~12x mais caro que o Haiku 5.5 por task).'}),
   A('claude-sonnet-5','Claude Sonnet 5','balanced',2,2.5,4,0.20,10),
-  A('claude-sonnet-4-6','Claude Sonnet 4.6','balanced',3,3.75,6,0.30,15,{aliases:['sonnet']}),
+  A('claude-sonnet-4-6','Claude Sonnet 4.6','balanced',3,3.75,6,0.30,15),
   A('claude-sonnet-4-5','Claude Sonnet 4.5','balanced',3,3.75,6,0.30,15,{status:'legacy'}),
   A('claude-opus-5-5','Claude Opus 5.5','premium',4,5,8,0.20,20),
   A('claude-opus-5','Claude Opus 5','premium',5,6.25,10,0.50,25),

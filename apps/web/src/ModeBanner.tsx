@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import './mode-banner.css';
 
-type Entry={key:string;label:string;provider:string;model:string;costly:boolean};
+type Entry={key:string;label:string;provider:string;model:string;costly:boolean;displayName?:string;tier?:string|null};
 type Mode={mode:'mock'|'real';forced:boolean;costly:Entry[];summary:string};
 
 /** Faixa sempre visível: deixa claro se a próxima execução gasta créditos (REAL) ou não (MOCK). */
@@ -18,6 +18,6 @@ export default function ModeBanner({workspaceId}:{workspaceId?:string}){
   const real=mode.mode==='real';
   return <span className={`mode-banner ${real?'real':'mock'}`} title={real?`Consome créditos: ${mode.summary}`:mode.forced?'Modo mock forçado (ORQ_FORCE_MOCK=1): nada é enviado a providers pagos.':'Nenhum provider pago está configurado.'} role="status">
     <b>{real?'REAL':'MOCK'}</b>
-    <span>{real?`consome créditos · ${mode.costly.map(entry=>entry.label).join(', ')}`:mode.forced?'sem custo (forçado)':'sem custo'}</span>
+    <span>{real?`consome créditos · ${mode.costly.map(entry=>`${entry.label}: ${entry.displayName||entry.model}${entry.tier&&entry.tier!=='economy'?' ⚠ caro':''}`).join(' · ')}`:mode.forced?'sem custo (forçado)':'sem custo'}</span>
   </span>;
 }

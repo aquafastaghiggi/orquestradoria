@@ -16,6 +16,9 @@ if /i not "%CONFIRMA%"=="SIM" (
   exit /b 1
 )
 set ORQ_FORCE_MOCK=
+rem Planner de missao real (Claude Haiku 5.5, ~US$ 0,01 por plano) a menos que voce ja tenha definido outro.
+if "%MISSION_PLANNER_PROVIDER%"=="" set MISSION_PLANNER_PROVIDER=claude-code
+if "%MISSION_PLANNER_MODEL%"=="" set MISSION_PLANNER_MODEL=claude-haiku-5-5
 set PORT=4000
 echo.
 echo   http://localhost:5173
