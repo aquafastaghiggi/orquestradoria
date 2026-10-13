@@ -89,6 +89,10 @@ Uma faixa no topo da tela mostra sempre o modo atual: verde **MOCK · sem custo*
 
 Os providers padrão (sem configuração) são Claude Code (Developer) e Codex (Reviewer). Em mock o Developer **não altera arquivos** (a tela avisa). Configuração por workspace em Configurações → Providers tem prioridade sobre as variáveis de ambiente, exceto com `ORQ_FORCE_MOCK=1`.
 
+### Segurança e operação
+
+A API é **somente local** (127.0.0.1; rejeita outros hosts/origens), há **tetos de gasto** diário/mensal/por task (padrão US$ 2 / US$ 20 / US$ 0,50), **backup diário automático** do banco e limpeza segura de worktrees órfãs — tudo em *Configurações*. Detalhes e limitações em [docs/security-and-operations.md](docs/security-and-operations.md).
+
 ## Arquitetura
 
 - `apps/api`: Express, SQLite, REST e SSE.

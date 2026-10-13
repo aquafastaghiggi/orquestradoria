@@ -2,7 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {usd} from './CostsPage';
 
 type RoleLine={role:string;free:boolean;provider:string;model:string;unknown?:boolean;displayName?:string;expectedUsd?:number};
-type Estimate={anyPaid:boolean;forcedMock:boolean;roles:RoleLine[];expectedUsd:number;lowUsd:number;highUsd:number;suggestedBudgetUsd:number;basis:string;incomplete:boolean;warnings:string[];steps:number};
+type Estimate={expensive?:boolean;defaultTaskCapUsd?:number;anyPaid:boolean;forcedMock:boolean;roles:RoleLine[];expectedUsd:number;lowUsd:number;highUsd:number;suggestedBudgetUsd:number;basis:string;incomplete:boolean;warnings:string[];steps:number};
 const ROLE:Record<string,string>={developer:'Developer',reviewer:'Reviewer'};
 
 /** Mostra quanto o trabalho deve custar com a configuração real do workspace e sugere um teto de orçamento. */
@@ -18,6 +18,8 @@ export default function CostHint({workspaceId,steps=1,onUseBudget,currentBudget}
       :<>
         <p className="cost-hint-value"><b>{usd(data.expectedUsd)}</b> <small>(faixa {usd(data.lowUsd)} – {usd(data.highUsd)}{steps>1?` · ${steps} etapas`:''})</small></p>
         <ul>{data.roles.filter(item=>!item.free&&!item.unknown).map(item=><li key={item.role}>{ROLE[item.role]}: {item.displayName} — {usd(item.expectedUsd)}</li>)}</ul>
+        {data.expensive&&<p className="cost-expensive"><b>Atenção: configuração cara.</b> Esta estimativa passa de US$ 0,25. Veja a página Custos para um modelo mais econômico.</p>}
+        {!!data.defaultTaskCapUsd&&<p className="muted">Se você não definir um limite, a task usa o padrão de {usd(data.defaultTaskCapUsd)} (ajustável em Configurações).</p>}
         {data.forcedMock&&<p className="muted"><b>Modo MOCK ativo:</b> agora nada será cobrado. O valor acima vale se você rodar em modo REAL.</p>}
         {data.basis==='default'&&<p className="muted">Baseado em perfil padrão; fica mais preciso conforme execuções reais são registradas.</p>}
         {data.incomplete&&<p className="muted warn-text">Algum modelo sem preço conhecido ficou fora da estimativa.</p>}

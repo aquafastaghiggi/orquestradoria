@@ -26,3 +26,5 @@
 .cost-hint ul{margin:4px 0 4px 18px;padding:0}
 .cost-hint-value b{font-size:1.15rem}
 .cost-hint .warn-text{color:#b45309}
+.cost-expensive{background:#fee2e2;color:#991b1b;border-radius:8px;padding:6px 10px}
+.system-panel{padding-top:0}
