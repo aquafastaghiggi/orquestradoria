@@ -26,7 +26,8 @@ export function classifyPhase(status:string,environmentStatus?:string|null):Hist
 }
 
 export function classifyMissionPhase(status:string,environmentStatus?:string|null):HistoryPhase{
-  if(['draft','plan_ready'].includes(status))return{group:'waiting',label:'Plano aguardando aprovação'};
+  if(status==='draft')return{group:'waiting',label:'Rascunho · gerar plano'};
+  if(status==='plan_ready')return{group:'waiting',label:'Plano aguardando aprovação'};
   if(status==='planning')return{group:'running',label:'Planejando'};
   if(status==='approved')return{group:'queued',label:'Aprovada · aguardando execução'};
   if(status==='waiting_human')return{group:'waiting',label:'Aguardando você'};
