@@ -7,7 +7,7 @@ const PREVIEWABLE=['approved_waiting_action','manual_review_preserved','failed_p
 const ADJUSTABLE=['approved_waiting_action','manual_review_preserved'];
 
 async function call(url:string,body?:unknown){
-  const response=await fetch(url,{method:body===undefined&&!url.endsWith('/preview')?'POST':'GET',headers:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+  const response=await fetch(url,{method:'POST',headers:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
   const data=await response.json().catch(()=>({}));
   return{ok:response.ok,data};
 }
@@ -27,7 +27,8 @@ export default function TaskPreviewCard({task,environment,onRefresh,notify}:Prop
       setPreview(data);
       if(data.status==='ready'&&data.url)window.open(data.url,'_blank','noopener');
       else notify(data.error||'Não foi possível iniciar o preview.','error');
-    }finally{setBusy(false);}
+    }catch(error){notify(error instanceof Error?error.message:'Não foi possível iniciar o preview.','error');}
+    finally{setBusy(false);}
   };
   const stop=async()=>{setBusy(true);try{const{data}=await call(`/api/tasks/${task.id}/preview/stop`);setPreview(data);}finally{setBusy(false);}};
   const requestChanges=async()=>{
@@ -38,7 +39,8 @@ export default function TaskPreviewCard({task,environment,onRefresh,notify}:Prop
       setFeedback('');setPreview({status:'stopped'});
       notify(`Ajuste enviado ao Developer (rodada ${data.round}).`,'success');
       onRefresh();
-    }finally{setBusy(false);}
+    }catch(error){notify(error instanceof Error?error.message:'Não foi possível solicitar o ajuste.','error');}
+    finally{setBusy(false);}
   };
 
   return <section className="panel task-preview-card">
