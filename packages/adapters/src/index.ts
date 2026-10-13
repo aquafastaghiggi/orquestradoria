@@ -15,6 +15,8 @@ export type {CliSpawn,CommandInvocation,CliProcessResult} from './cli-process.js
 export {CommandTesterAdapter,buildTesterSummary,browserPlan,detectProjectProfile,normalizeAssignedFiles} from './tester.js';
 export {ClaudeCodeMissionPlanner,normalizeMissionPlannerOutput} from './mission-planner.js';
 export {parseClaudeStructuredText} from './claude.js';
+export {extractClaudeUsage} from './claude-usage.js';
+export type {ClaudeUsage} from './claude-usage.js';
 export {verifyAcceptanceCoverage,validateAcceptanceCoveragePlan,ACCEPTANCE_EVIDENCE_TYPES} from './acceptance-coverage.js';
 export type {AcceptanceCoverageResult,AcceptanceCoverageItem,AcceptanceCoverageEvidence,AcceptanceEvidenceType} from './acceptance-coverage.js';
 export type {ClaudeMissionPlannerConfig} from './mission-planner.js';

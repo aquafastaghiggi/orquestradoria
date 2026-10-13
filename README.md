@@ -73,18 +73,20 @@ Fluxo: **workspace → task → acompanhar → preview → ajuste → aplicar**.
 
 - **Registrar workspace**: aba *Pasta existente* (seletor de pasta, checagem de Git/branch/stack/readiness) ou *Novo projeto a partir de uma ideia* (cria a pasta, `git init`, commit inicial, workspace e uma Missão em rascunho, sem chamar provider).
 - **Quadro de status e histórico** por workspace: Na fila / Em execução / Aguardando você / Precisa de atenção / Finalizadas, com etapas, duração, tokens, custo, arquivos e ajustes.
-- **Preview** da task a partir do worktree isolado (a branch principal não é tocada) e **Solicitar ajuste** em linguagem natural, que retoma do Developer no mesmo worktree.
+- **Preview** e **Solicitar ajuste** (linguagem natural, retoma do Developer no mesmo worktree) tanto na **task** quanto na **missão** (um ajuste de missão vira uma nova etapa "Ajuste N" no mesmo worktree compartilhado). A branch principal não é tocada.
+- Depois de **criar um projeto a partir de uma ideia**, a tela abre direto o workspace com a missão aberta ("Gerar plano").
+- **Custo real**: o Claude Code agora reporta tokens e custo (US$) por execução; antes aparecia 0.
 
-### Rodar sem gastar créditos
+### Iniciar: mock (sem custo) ou real
 
-Os providers padrão são Claude Code (Developer) e Codex (Reviewer). Para usar somente mock:
+Na raiz do repositório:
 
-```powershell
-$env:DEVELOPER_PROVIDER="mock"; $env:REVIEWER_PROVIDER="mock"; $env:TESTER_PROVIDER="mock"; $env:PROMPT_REFINER_PROVIDER="mock"
-pnpm dev
-```
+- `iniciar-mock.cmd` — **modo MOCK forçado** (`ORQ_FORCE_MOCK=1`): nenhum provider pago é chamado, **mesmo que o workspace esteja configurado com Claude/Codex** (os providers pagos viram mock em memória). Usa o mesmo banco, então seus workspaces aparecem.
+- `iniciar-real.cmd` — modo real: usa os providers configurados e **consome créditos**; pede confirmação (`SIM`).
 
-Em mock o Developer **não altera arquivos** (a tela avisa). Configuração por workspace em Configurações → Providers tem prioridade sobre as variáveis de ambiente.
+Uma faixa no topo da tela mostra sempre o modo atual: verde **MOCK · sem custo** ou vermelha **REAL · consome créditos** (com os papéis pagos). Para rodar manualmente sem os atalhos: `$env:ORQ_FORCE_MOCK="1"; pnpm dev`.
+
+Os providers padrão (sem configuração) são Claude Code (Developer) e Codex (Reviewer). Em mock o Developer **não altera arquivos** (a tela avisa). Configuração por workspace em Configurações → Providers tem prioridade sobre as variáveis de ambiente, exceto com `ORQ_FORCE_MOCK=1`.
 
 ## Arquitetura
 

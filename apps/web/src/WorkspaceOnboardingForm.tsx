@@ -2,7 +2,7 @@ import React,{useState} from 'react';
 
 type Issue={level:'error'|'warning'|'info';code:string;message:string};
 type Inspection={location:string;suggestedName:string;git:{currentBranch:string|null;resolvedBaseBranch:string|null;dirty:boolean}|null;stack:{runtime:string;projectType:string;packageManager?:string;testCommands:string[]}|null;issues:Issue[];ready:boolean};
-type Props={onClose:()=>void;onCreated:()=>void;notify:(message:string,tone?:'success'|'error'|'info')=>void};
+type Props={onClose:()=>void;onCreated:(workspace?:any,missionId?:string)=>void;notify:(message:string,tone?:'success'|'error'|'info')=>void};
 
 const post=async(url:string,body?:unknown)=>{
   const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
@@ -35,7 +35,7 @@ export default function WorkspaceOnboardingForm({onClose,onCreated,notify}:Props
     try{
       const workspace=await post('/api/workspaces',{name,location:info.location,type:'local'});
       await post(`/api/workspaces/${workspace.id}/context/analyze`).catch(()=>undefined);
-      onCreated();
+      onCreated(workspace);
     }catch(error){notify(error instanceof Error?error.message:'Falha ao registrar.','error');}
     finally{setBusy(false);}
   };

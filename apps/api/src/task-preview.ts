@@ -40,7 +40,8 @@ export class TaskPreviewManager{
   async stopAll(){await Promise.all([...this.sessions.keys()].map(id=>this.stop(id)));}
 }
 
-export function canRequestAdjustment(task:{status?:string;environmentStatus?:string|null;isolationMode?:string|null;worktreePath?:string|null}){
+export function canRequestAdjustment(task:{status?:string;environmentStatus?:string|null;isolationMode?:string|null;worktreePath?:string|null;missionId?:string|null}){
+  if(task.missionId)return{ok:false,reason:'Esta task pertence a uma missão; peça o ajuste pela missão.'};
   if(task.isolationMode!=='worktree')return{ok:false,reason:'Ajustes exigem uma task com worktree isolado.'};
   if(!ADJUSTABLE_TASK_STATUS.includes(String(task.status)))return{ok:false,reason:'Só é possível solicitar ajuste de uma task aprovada ou com correções pendentes.'};
   if(!ADJUSTABLE_ENVIRONMENT.includes(String(task.environmentStatus)))return{ok:false,reason:'O ambiente da task não está aguardando decisão.'};

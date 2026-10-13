@@ -1,0 +1,5 @@
+.mode-banner{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:999px;font-size:.78rem;border:1px solid transparent;max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mode-banner b{letter-spacing:.06em}
+.mode-banner.mock{background:#dcfce7;color:#166534;border-color:#86efac}
+.mode-banner.real{background:#fee2e2;color:#991b1b;border-color:#fca5a5;font-weight:600}
+.mode-banner span{overflow:hidden;text-overflow:ellipsis}

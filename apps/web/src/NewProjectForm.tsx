@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 
-type Props={onClose:()=>void;onCreated:()=>void;notify:(message:string,tone?:'success'|'error'|'info')=>void};
+type Props={onClose:()=>void;onCreated:(workspace?:any,missionId?:string)=>void;notify:(message:string,tone?:'success'|'error'|'info')=>void};
 
 const post=async(url:string,body?:unknown)=>{
   const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
@@ -25,8 +25,7 @@ export default function NewProjectForm({onClose,onCreated,notify}:Props){
     try{
       const created=await post('/api/projects/from-idea',{name,parentDir,idea});
       await post(`/api/workspaces/${created.workspace.id}/context/analyze`).catch(()=>undefined);
-      notify(`Projeto criado em ${created.path}. Abra o workspace e gere o plano da missão.`,'success');
-      onCreated();
+      onCreated(created.workspace,created.missionId);
     }catch(error){notify(error instanceof Error?error.message:'Falha ao criar o projeto.','error');}
     finally{setBusy(false);}
   };
