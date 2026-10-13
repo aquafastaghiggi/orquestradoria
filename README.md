@@ -67,6 +67,25 @@ pnpm typecheck
 pnpm build
 ```
 
+## Uso diário local (MVP)
+
+Fluxo: **workspace → task → acompanhar → preview → ajuste → aplicar**. Detalhes em [docs/mvp-daily-workflow.md](docs/mvp-daily-workflow.md) e [docs/preview-and-adjustments.md](docs/preview-and-adjustments.md).
+
+- **Registrar workspace**: aba *Pasta existente* (seletor de pasta, checagem de Git/branch/stack/readiness) ou *Novo projeto a partir de uma ideia* (cria a pasta, `git init`, commit inicial, workspace e uma Missão em rascunho, sem chamar provider).
+- **Quadro de status e histórico** por workspace: Na fila / Em execução / Aguardando você / Precisa de atenção / Finalizadas, com etapas, duração, tokens, custo, arquivos e ajustes.
+- **Preview** da task a partir do worktree isolado (a branch principal não é tocada) e **Solicitar ajuste** em linguagem natural, que retoma do Developer no mesmo worktree.
+
+### Rodar sem gastar créditos
+
+Os providers padrão são Claude Code (Developer) e Codex (Reviewer). Para usar somente mock:
+
+```powershell
+$env:DEVELOPER_PROVIDER="mock"; $env:REVIEWER_PROVIDER="mock"; $env:TESTER_PROVIDER="mock"; $env:PROMPT_REFINER_PROVIDER="mock"
+pnpm dev
+```
+
+Em mock o Developer **não altera arquivos** (a tela avisa). Configuração por workspace em Configurações → Providers tem prioridade sobre as variáveis de ambiente.
+
 ## Arquitetura
 
 - `apps/api`: Express, SQLite, REST e SSE.
