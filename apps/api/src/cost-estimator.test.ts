@@ -2,15 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import {DEFAULT_PRICING,computeCost,findPrice} from '@orchestrator/shared';
-import {buildCostSummary,candidatesFor,compareCandidates,defaultProfile,estimateProfileCost,profileFromHistory,scaleProfile} from './cost-estimator.js';
+import {buildCostSummary,candidatesFor,compareCandidates,defaultProfile,estimateProfileCost,profileForSize,profileFromHistory,scaleProfile} from './cost-estimator.js';
 
 const price=(id:string)=>findPrice(DEFAULT_PRICING,id)!;
 
-test('default Claude Code "small" profile is calibrated against the real measured run (US$ 0.1023 on Haiku 4.5)',()=>{
-  const cost=computeCost(price('claude-haiku-4-5'),defaultProfile('claude-code','developer','small')).usd;
-  assert.ok(Math.abs(cost-0.1023)/0.1023<0.05,`estimated ${cost}`);
+test('default Claude Code profiles are calibrated against 3 real Haiku 5.5 runs (A 0.01436, B 0.01368 warm cache, C 0.03411)',()=>{
+  const est=(size:'small'|'medium'|'large')=>{const profile=defaultProfile('claude-code','developer',size);return computeCost(price('claude-haiku-5-5'),profile).usd+(profile.fixedUsd||0);};
+  assert.ok(Math.abs(est('small')-0.01436)/0.01436<0.15,`small ${est('small')}`);
+  assert.ok(Math.abs(est('large')-0.03411)/0.03411<0.15,`large ${est('large')}`);
+  // médio medido com cache quente: o padrão assume cache frio (pior caso), então fica acima, mas dentro de +50%
+  assert.ok(est('medium')>=0.01368&&est('medium')<=0.01368*1.5,`medium ${est('medium')}`);
 });
 
+test('with real history the chosen size still matters (small < medium < large)',()=>{
+  const db=new Database(':memory:');
+  db.exec("CREATE TABLE executions(id TEXT,taskId TEXT,provider TEXT,role TEXT,model TEXT,status TEXT,usageDetails TEXT,startedAt TEXT)");
+  const insert=db.prepare('INSERT INTO executions VALUES (?,?,?,?,?,?,?,?)');
+  const d=(w:number,r:number,o:number)=>JSON.stringify([{model:'claude-haiku-5-5',breakdown:{inputTokens:10,cacheWrite1hTokens:w,cacheReadTokens:r,outputTokens:o,requests:5}}]);
+  insert.run('1','t','claude-code','developer','x','completed',d(52000,153000,1200),'2026-10-01T10:00:00Z');
+  insert.run('2','t','claude-code','developer','x','completed',d(22000,250000,9500),'2026-10-02T10:00:00Z');
+  insert.run('3','t','claude-code','developer','x','completed',d(46000,790000,30000),'2026-10-03T10:00:00Z');
+  const history=profileFromHistory(db,'claude-code','developer')!;
+  const cost=(size:'small'|'medium'|'large')=>{const picked=profileForSize(history,size);return estimateProfileCost(price('claude-haiku-5-5'),picked.profile,picked.spread);};
+  assert.ok(cost('small').expectedUsd<cost('medium').expectedUsd&&cost('medium').expectedUsd<cost('large').expectedUsd);
+  assert.ok(cost('large').highUsd>cost('large').expectedUsd);
+});
 test('Haiku 5.5 is roughly 10x cheaper than the Haiku 4.5 alias and 20x cheaper than Sonnet 5.5 for the same session',()=>{
   const profile=defaultProfile('claude-code','developer','small');
   const h55=computeCost(price('claude-haiku-5-5'),profile).usd,h45=computeCost(price('claude-haiku-4-5'),profile).usd,s55=computeCost(price('claude-sonnet-5-5'),profile).usd;

@@ -50,8 +50,23 @@ Medido em 2026-10-13: para `claude-haiku-5-5` o Claude Code informou **US$ 0,426
 
 "Aplicar configuração econômica" grava a configuração (global ou do workspace) para **tasks novas**; nada muda sozinho.
 
+## Calibração real (2026-10-13, Claude Haiku 5.5 pelo orquestrador, ~US$ 0,087 gastos)
+
+| Task | Turnos | Duração | Escrita cache 1h | Leitura cache | Saída | Custo **calculado** | Custo informado pelo CLI |
+|---|---|---|---|---|---|---|---|
+| A — trocar 1 linha | 5 | 17 s | 51 844 | 152 810 | 1 178 | **US$ 0,0144** | US$ 0,4708 (33x) |
+| B — lista de tarefas (3 arquivos) | 8 | 48 s | 22 301 (cache quente) | 251 608 | 9 474 | **US$ 0,0137** | US$ 0,4202 (31x) |
+| C — evolução de 4 arquivos | 15 | 137 s | 45 654 | 789 896 | 30 087 | **US$ 0,0341** | US$ 1,1271 (33x) |
+| Refinador de prompt (Claude Code) | 1 | — | — | — | — | **US$ 0,0124** | — |
+| Planner de missão (Claude Code, 6 etapas) | 1 | — | — | — | — | **US$ 0,0121** | — |
+
+- O custo do CLI para `claude-haiku-5-5` (`costBasis: "unknown"`) é ~30x o real em todas as medições; a tabela é a fonte de verdade.
+- A escrita de cache da sessão varia (22 mil a 52 mil tokens) conforme o cache de 1 h do Claude Code já estar quente; os perfis padrão assumem cache frio (pior caso).
+- Cada sessão do Claude Code tem ~US$ 0,0019 fixos em chamadas auxiliares de Haiku 4.5 (`fixedUsd` no perfil).
+- **Refinador e Planner de missão via Claude Code custam ~US$ 0,012 por chamada** (sessão de ~50 mil tokens), mais que uma task pequena. Pela API direta da Anthropic (`PROMPT_REFINER_PROVIDER=anthropic`, ~1 mil tokens de entrada e 500 de saída no Haiku 5.5) o Refinador custaria ~US$ 0,0004.
+- Com ≥ 3 execuções reais o estimador usa o histórico: tamanho pequeno ≈ p25, médio ≈ mediana, grande ≈ p90.
 ## Pendências
-- Estimativa de custo dentro do modal de criação de task/missão.
-- Custo do Planner de missão e do Refinador (Claude Code) ainda não é contabilizado.
-- Perfis `medium`/`large` são extrapolações até haver histórico real.
+
+- Perfis do Codex (Reviewer) ainda são extrapolações; só há uma medição real (prompt trivial: 14 010 tokens, US$ 0,0008).
+- Usar a API direta da Anthropic no Refinador/Planner de missão (hoje só via Claude Code CLI).
 - Adapter do Cursor (somente informativo por ora).

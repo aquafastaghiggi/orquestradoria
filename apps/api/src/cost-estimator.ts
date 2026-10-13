@@ -6,20 +6,22 @@ export type TaskSize='small'|'medium'|'large';
 export type CliProvider='claude-code'|'codex-cli'|'cursor';
 
 /** Perfil de consumo (tokens) de UMA execução de agente via CLI. Cada CLI gasta de um jeito: o Claude Code carrega ~40-53 mil tokens de sistema em cache a cada sessão. */
-export interface TokenProfile extends TokenBreakdown{requests:number;}
+export interface TokenProfile extends TokenBreakdown{requests:number;
+  /** Custo fixo por execução que não depende do modelo escolhido (ex.: chamadas auxiliares do Claude Code em Haiku 4.5). */
+  fixedUsd?:number;}
 
 const PROFILE_VERSION='2026-10-13';
 export {PROFILE_VERSION};
 
 /**
- * Perfis iniciais. "small" do Claude Code é uma execução REAL medida (task de uma linha, Haiku 4.5, 5 turnos):
- * 2077 entrada, 38 912 escrita de cache 1h, 150 522 leitura de cache, 1 468 saída.
- * "medium"/"large" são extrapolações conservadoras e devem ser substituídas pelo histórico real (ver `profileFromHistory`).
+ * Perfis iniciais do Claude Code: 3 execuções REAIS medidas em 2026-10-13 com Claude Haiku 5.5 (task de 1 linha, lista de tarefas com 3 arquivos e
+ * evolução de 4 arquivos). Escrita de cache de 1 h = pior caso (cache frio); com cache quente (sessão anterior < 1 h) cai para ~22 mil.
+ * O custo fixo ~US$ 0,0019 é a chamada auxiliar do próprio Claude Code em Haiku 4.5. O histórico real (`profileFromHistory`) substitui estes valores.
  */
 const CLAUDE_CODE:Record<TaskSize,TokenProfile>={
-  small:{inputTokens:2_100,cacheWrite1hTokens:39_000,cacheReadTokens:150_000,outputTokens:1_500,requests:5},
-  medium:{inputTokens:6_000,cacheWrite1hTokens:50_000,cacheReadTokens:500_000,outputTokens:6_000,requests:12},
-  large:{inputTokens:15_000,cacheWrite1hTokens:70_000,cacheReadTokens:1_500_000,outputTokens:18_000,requests:30},
+  small:{inputTokens:10,cacheWrite1hTokens:52_000,cacheReadTokens:153_000,outputTokens:1_200,requests:5,fixedUsd:0.0019},
+  medium:{inputTokens:10,cacheWrite1hTokens:50_000,cacheReadTokens:250_000,outputTokens:9_500,requests:8,fixedUsd:0.0019},
+  large:{inputTokens:24,cacheWrite1hTokens:50_000,cacheReadTokens:790_000,outputTokens:30_000,requests:15,fixedUsd:0.0019},
 };
 /** Codex: entrada medida = 14 010 tokens (11 008 em cache) para um prompt trivial; perfis maiores são extrapolados. */
 const CODEX:Record<TaskSize,TokenProfile>={
@@ -49,7 +51,8 @@ export function estimateProfileCost(price:ModelPrice,profile:TokenProfile,spread
   const expected=computeCost(price,profile),low=computeCost(price,spread.low),high=computeCost(price,spread.high);
   const avgPrompt=(profile.inputTokens+(profile.cacheWrite5mTokens||0)+(profile.cacheWrite1hTokens||0)+(profile.cacheReadTokens||0))/Math.max(1,profile.requests);
   const threshold=price.longContext?.thresholdTokens;
-  return{expectedUsd:expected.usd,lowUsd:Math.min(low.usd,expected.usd),highUsd:Math.max(high.usd,expected.usd),longContextRisk:Boolean(threshold&&avgPrompt>threshold*0.8)};
+  const fixed=profile.fixedUsd||0;
+  return{expectedUsd:expected.usd+fixed,lowUsd:Math.min(low.usd,expected.usd)+(spread.low.fixedUsd??fixed),highUsd:Math.max(high.usd,expected.usd)+(spread.high.fixedUsd??fixed),longContextRisk:Boolean(threshold&&avgPrompt>threshold*0.8)};
 }
 
 // ───────── Histórico real ─────────
@@ -75,6 +78,13 @@ export function profileFromHistory(db:Database.Database,provider:string,role:str
   return{samples:samples.length,median:pick(median),low:pick(v=>percentile(v,0.25)),high:pick(v=>percentile(v,0.9))};
 }
 
+/** O tamanho escolhe a parte da distribuição real: pequeno ≈ p25, médio ≈ mediana, grande ≈ p90. */
+export function profileForSize(history:HistoryProfile,size:TaskSize):{profile:TokenProfile;spread:{low:TokenProfile;high:TokenProfile}}{
+  if(size==='small')return{profile:history.low,spread:{low:scaleProfile(history.low,0.6),high:history.median}};
+  if(size==='large')return{profile:history.high,spread:{low:history.median,high:scaleProfile(history.high,1.5)}};
+  return{profile:history.median,spread:{low:history.low,high:history.high}};
+}
+
 // ───────── Candidatos e comparação ─────────
 export interface Candidate{provider:'claude-code'|'codex-cli'|'cursor';price:ModelPrice;}
 
@@ -97,8 +107,9 @@ export interface ComparisonRow{provider:string;modelId:string;displayName:string
 export function compareCandidates(input:{candidates:Candidate[];role:CostRole;size:TaskSize;current?:{provider:string;modelId?:string};history:(provider:string)=>HistoryProfile|null;fixedProfile?:TokenProfile}):ComparisonRow[]{
   const rows=input.candidates.map(({provider,price})=>{
     const history=input.fixedProfile?null:input.history(provider);
-    const profile=input.fixedProfile||(history?history.median:defaultProfile(provider,input.role,input.size));
-    const spread=history?{low:history.low,high:history.high}:{low:scaleProfile(profile,0.5),high:scaleProfile(profile,2.5)};
+    const picked=history?profileForSize(history,input.size):null;
+    const profile=input.fixedProfile||(picked?picked.profile:defaultProfile(provider,input.role,input.size));
+    const spread=picked?picked.spread:{low:scaleProfile(profile,0.5),high:scaleProfile(profile,2.5)};
     const estimate=estimateProfileCost(price,profile,spread);
     return{provider,modelId:price.id,displayName:price.displayName,tier:price.tier,executable:price.executable,verified:Boolean(price.verified),expectedUsd:estimate.expectedUsd,lowUsd:estimate.lowUsd,highUsd:estimate.highUsd,longContextRisk:estimate.longContextRisk,note:price.note,savingsVsCurrentPct:null as number|null,isCurrent:false,isCheapest:false};
   }).sort((a,b)=>a.expectedUsd-b.expectedUsd);
