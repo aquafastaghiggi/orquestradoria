@@ -29,7 +29,8 @@ export interface StageContext{prompt:string;manifest:ContextManifest;contextChar
 export interface ExecutionContext{task:Task;workspaceContext:{id:string;type:WorkspaceType;location:string;branch?:string};projectRules:string[];stage:AgentRole;previousArtifacts:Artifact[];constraints:{timeoutSeconds:number;tokenBudget:number;budgetUsd:number};expectedOutputSchema?:Record<string,unknown>;stageContext?:StageContext;reviewBundle?:ReviewBundle;projectContext?:unknown;}
 export interface ProgressEvent{message:string;percent?:number;timestamp:string;}
 export interface StructuredExecutionOutput{stdout:string;stderr:string;progressEvents:ProgressEvent[];structuredResult?:Record<string,unknown>;rawProviderResponse?:unknown;}
-export interface ProviderExecutionResult extends StructuredExecutionOutput{output:string;tokenUsage:number;inputTokens?:number;cachedInputTokens?:number;outputTokens?:number;reasoningTokens?:number;estimatedCost?:number;providerSessionId?:string;conversationId?:string;resumeToken?:string;}
+export interface UsageDetail{model?:string;reportedUsd?:number;costBasis?:string;breakdown:import('./pricing.js').TokenBreakdown;}
+export interface ProviderExecutionResult extends StructuredExecutionOutput{output:string;tokenUsage:number;inputTokens?:number;cachedInputTokens?:number;outputTokens?:number;reasoningTokens?:number;estimatedCost?:number;usageDetails?:UsageDetail[];providerSessionId?:string;conversationId?:string;resumeToken?:string;}
 export interface Execution{id:string;taskId:string;role:AgentRole;provider:string;model:string;status:ExecutionStatus;startedAt?:string;finishedAt?:string;duration?:number;tokenUsage?:number;inputTokens?:number;cachedInputTokens?:number;outputTokens?:number;reasoningTokens?:number;estimatedCost?:number;logs:string;error?:string;lastHeartbeatAt?:string;progressMessage?:string;progressPercent?:number;providerSessionId?:string;conversationId?:string;resumeToken?:string;parentExecutionId?:string;stdout?:string;stderr?:string;progressEvents?:ProgressEvent[];structuredResult?:Record<string,unknown>;rawProviderResponse?:unknown;promptTemplateId?:string;promptTemplateVersion?:number;renderedPromptHash?:string;contextChars?:number;contextSections?:string[];contextTruncated?:boolean;contextFilesIncluded?:string[];contextFilesOmitted?:string[];reviewBundleCreated?:boolean;reviewBundlePath?:string;reviewBundleFiles?:string[];reviewBundleBytes?:number;}
 export interface Artifact{id:string;taskId:string;executionId?:string;type:ArtifactType;name:string;content:string;createdAt:string;}
 export interface AuditEntry{id:string;actor:string;action:string;taskId?:string;executionId?:string;provider?:string;model?:string;timestamp:string;metadata:string;}
@@ -44,3 +45,4 @@ export const TASK_STATUSES:TaskStatus[]=['pending','analyzing','planning','imple
 export * from './sse.js';
 export * from './provider-registry.js';
 export * from './acceptance.js';
+export * from './pricing.js';
