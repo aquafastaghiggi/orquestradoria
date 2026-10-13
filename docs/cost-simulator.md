@@ -57,6 +57,7 @@ Medido em 2026-10-13: para `claude-haiku-5-5` o Claude Code informou **US$ 0,426
 | A — trocar 1 linha | 5 | 17 s | 51 844 | 152 810 | 1 178 | **US$ 0,0144** | US$ 0,4708 (33x) |
 | B — lista de tarefas (3 arquivos) | 8 | 48 s | 22 301 (cache quente) | 251 608 | 9 474 | **US$ 0,0137** | US$ 0,4202 (31x) |
 | C — evolução de 4 arquivos | 15 | 137 s | 45 654 | 789 896 | 30 087 | **US$ 0,0341** | US$ 1,1271 (33x) |
+| Ensaio geral real (Developer Haiku 5.5 + Reviewer **Codex gpt-5.6-luna**): task 1 linha / 2 etapas de missão / ajuste | | | | | | **US$ 0,018 / 0,0295 / 0,0157** | |
 | Refinador de prompt (Claude Code) | 1 | — | — | — | — | **US$ 0,0124** | — |
 | Planner de missão (Claude Code, 6 etapas) | 1 | — | — | — | — | **US$ 0,0121** | — |
 
@@ -67,6 +68,12 @@ Medido em 2026-10-13: para `claude-haiku-5-5` o Claude Code informou **US$ 0,426
 - Com ≥ 3 execuções reais o estimador usa o histórico: tamanho pequeno ≈ p25, médio ≈ mediana, grande ≈ p90.
 ## Pendências
 
-- Perfis do Codex (Reviewer) ainda são extrapolações; só há uma medição real (prompt trivial: 14 010 tokens, US$ 0,0008).
+- O perfil do Codex como Developer é extrapolado (o orquestrador só executa Codex como Reviewer).
 - Usar a API direta da Anthropic no Refinador/Planner de missão (hoje só via Claude Code CLI).
 - Adapter do Cursor (somente informativo por ora).
+
+## Ensaio geral real (2026-10-13, US$ 0,0745 gastos)
+
+Projeto descartável, Developer = Claude Haiku 5.5, Reviewer = Codex gpt-5.6-luna, teto diário US$ 0,30: task de 1 linha → missão de 2 etapas (plano real do Claude) → preview → ajuste real → Apply. Tudo aprovado e o app gerado funcionou no navegador (adicionar, concluir, excluir, localStorage, título verde). Reviewer Codex: US$ 0,0030–0,0052 por revisão (uncached 6,4k–10,6k tokens, cache 41k–95k, saída 0,5k–1k).
+
+**Atenção:** o Planner real quebrou um pedido simples em **8 etapas**; cada etapa roda Developer + Reviewer (~US$ 0,018), então a missão inteira custaria ~US$ 0,15. Revise o plano e enxugue as etapas antes de aprovar (a estimativa na revisão do plano mostra o total).

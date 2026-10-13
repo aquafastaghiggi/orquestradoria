@@ -124,3 +124,9 @@ test('summary also counts Mission Planner and Prompt Refiner usage (ai_usage) by
   // sem a tabela (bancos antigos) o resumo continua funcionando
   assert.equal(buildCostSummary(seed(),{days:30}).executions,0);
 });
+test('default Codex Reviewer profiles match 3 real gpt-5.6-luna reviews (0.00303 / 0.00362 / 0.00518)',()=>{
+  const est=(size:'small'|'medium'|'large')=>computeCost(price('gpt-5.6-luna'),defaultProfile('codex-cli','reviewer',size)).usd;
+  assert.ok(Math.abs(est('small')-0.00303)/0.00303<0.1,`small ${est('small')}`);
+  assert.ok(Math.abs(est('medium')-0.00362)/0.00362<0.25,`medium ${est('medium')}`);
+  assert.ok(Math.abs(est('large')-0.00518)/0.00518<0.1,`large ${est('large')}`);
+});

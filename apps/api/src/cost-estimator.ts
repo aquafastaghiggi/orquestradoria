@@ -23,18 +23,20 @@ const CLAUDE_CODE:Record<TaskSize,TokenProfile>={
   medium:{inputTokens:10,cacheWrite1hTokens:50_000,cacheReadTokens:250_000,outputTokens:9_500,requests:8,fixedUsd:0.0019},
   large:{inputTokens:24,cacheWrite1hTokens:50_000,cacheReadTokens:790_000,outputTokens:30_000,requests:15,fixedUsd:0.0019},
 };
-/** Codex: entrada medida = 14 010 tokens (11 008 em cache) para um prompt trivial; perfis maiores são extrapolados. */
+/** Codex Reviewer: 4 revisões REAIS medidas em 2026-10-13 (gpt-5.6-luna, US$ 0,0030 a 0,0052): entrada sem cache 6,4k–10,6k, cache 41k–95k (o Codex lê arquivos em vários turnos), saída 0,5k–1k. */
 const CODEX:Record<TaskSize,TokenProfile>={
-  small:{inputTokens:6_000,cacheReadTokens:14_000,outputTokens:1_500,requests:1},
-  medium:{inputTokens:25_000,cacheReadTokens:60_000,outputTokens:4_000,requests:1},
-  large:{inputTokens:80_000,cacheReadTokens:200_000,outputTokens:10_000,requests:1},
+  small:{inputTokens:6_400,cacheReadTokens:41_000,outputTokens:800,requests:1},
+  medium:{inputTokens:9_000,cacheReadTokens:60_000,outputTokens:1_000,requests:1},
+  large:{inputTokens:10_600,cacheReadTokens:95_000,outputTokens:1_000,requests:1},
 };
 
 export function defaultProfile(provider:CliProvider,role:CostRole,size:TaskSize):TokenProfile{
   const base=provider==='codex-cli'?CODEX[size]:CLAUDE_CODE[size];
   // Reviewer e planner leem e escrevem bem menos que o developer (sem laço de edição/teste).
-  const factor=role==='developer'?1:role==='reviewer'?0.35:0.3;
+  // Os perfis do Codex já são de Reviewer (medidos); como Developer seria um trabalho bem maior.
+  const factor=provider==='codex-cli'?(role==='developer'?4:1):role==='developer'?1:role==='reviewer'?0.35:0.3;
   if(factor===1)return{...base};
+  if(factor>1)return{...base,inputTokens:Math.round(base.inputTokens*factor),cacheReadTokens:Math.round((base.cacheReadTokens||0)*factor),outputTokens:Math.round(base.outputTokens*factor)};
   const k=(value?:number)=>value===undefined?undefined:Math.round(value*factor);
   return{inputTokens:k(base.inputTokens)!,cacheWrite5mTokens:k(base.cacheWrite5mTokens),cacheWrite1hTokens:base.cacheWrite1hTokens,cacheReadTokens:k(base.cacheReadTokens),outputTokens:k(base.outputTokens)!,requests:Math.max(1,Math.round(base.requests*factor))};
 }
