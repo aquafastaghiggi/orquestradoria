@@ -62,3 +62,18 @@ test('stop closes the port even while a browser keeps a connection open',async()
     assert.equal(open,false);
   }finally{agent.destroy();await previews.stopAll();rmSync(dir,{recursive:true,force:true});}
 });
+
+test('a task that stopped asking for help (attention) can be answered even when failed or in manual review; without it, it cannot',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'orq-adj-'));
+  try{
+    const base={isolationMode:'worktree',worktreePath:dir,missionId:null};
+    for(const [status,environmentStatus] of [['needs_manual_review','manual_review_preserved'],['failed','failed_preserved']]){
+      const task={...base,status,environmentStatus};
+      assert.equal(canRequestAdjustment(task).ok,false,`${status} without attention`);
+      assert.equal(canRequestAdjustment(task,true).ok,true,`${status} with attention`);
+    }
+    assert.equal(canRequestAdjustment({...base,status:'running',environmentStatus:'active'},true).ok,false);
+    assert.equal(canRequestAdjustment({...base,status:'failed',environmentStatus:'failed_preserved',missionId:'m1'},true).ok,false);
+    assert.equal(canRequestAdjustment({...base,status:'failed',environmentStatus:'failed_preserved',worktreePath:join(dir,'gone')},true).ok,false);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});

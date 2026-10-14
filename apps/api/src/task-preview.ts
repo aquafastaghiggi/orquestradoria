@@ -40,11 +40,11 @@ export class TaskPreviewManager{
   async stopAll(){await Promise.all([...this.sessions.keys()].map(id=>this.stop(id)));}
 }
 
-export function canRequestAdjustment(task:{status?:string;environmentStatus?:string|null;isolationMode?:string|null;worktreePath?:string|null;missionId?:string|null}){
+export function canRequestAdjustment(task:{status?:string;environmentStatus?:string|null;isolationMode?:string|null;worktreePath?:string|null;missionId?:string|null},hasAttention=false){
   if(task.missionId)return{ok:false,reason:'Esta task pertence a uma missão; peça o ajuste pela missão.'};
   if(task.isolationMode!=='worktree')return{ok:false,reason:'Ajustes exigem uma task com worktree isolado.'};
-  if(!ADJUSTABLE_TASK_STATUS.includes(String(task.status)))return{ok:false,reason:'Só é possível solicitar ajuste de uma task aprovada ou com correções pendentes.'};
-  if(!ADJUSTABLE_ENVIRONMENT.includes(String(task.environmentStatus)))return{ok:false,reason:'O ambiente da task não está aguardando decisão.'};
+  if(!(hasAttention?[...ADJUSTABLE_TASK_STATUS,'needs_manual_review','failed']:ADJUSTABLE_TASK_STATUS).includes(String(task.status)))return{ok:false,reason:'Só é possível solicitar ajuste de uma task aprovada ou com correções pendentes.'};
+  if(!(hasAttention?[...ADJUSTABLE_ENVIRONMENT,'failed_preserved']:ADJUSTABLE_ENVIRONMENT).includes(String(task.environmentStatus)))return{ok:false,reason:'O ambiente da task não está aguardando decisão.'};
   if(!task.worktreePath||!existsSync(task.worktreePath))return{ok:false,reason:'O worktree da task não existe mais.'};
   return{ok:true as const};
 }

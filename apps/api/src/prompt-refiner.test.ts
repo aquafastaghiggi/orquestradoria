@@ -1,6 +1,6 @@
 import {strict as assert} from 'node:assert';
 import {test} from 'node:test';
-import {AnthropicPromptRefiner,MockPromptRefiner,OpenAICompatiblePromptRefiner,buildFinalPrompt} from '@orchestrator/core';
+import {AnthropicPromptRefiner,MockPromptRefiner,OpenAICompatiblePromptRefiner,buildFinalPrompt,smartTitle} from '@orchestrator/core';
 
 test('mock prompt refiner returns structured output without inventing stack details',async()=>{
   const result=await new MockPromptRefiner().refine({request:'melhora a tela',workspaceName:'demo'});
@@ -63,4 +63,18 @@ test('Anthropic retries one transient 429 but does not retry 401 or invalid JSON
   let invalidCalls=0;globalThis.fetch=async()=>{invalidCalls++;return new Response(JSON.stringify({content:[{type:'text',text:'not json'}]}),{status:200});};
   try {const refiner=new AnthropicPromptRefiner('model',{baseUrl:'https://api.anthropic.com',apiKey:'secret-key',timeoutMs:1000,maxOutputChars:6000,maxRetries:1,maxTokens:1200});await assert.rejects(refiner.refine({request:'B'}));assert.equal(invalidCalls,1);}
   finally {globalThis.fetch=previous;}
+});
+
+test('titles are cut at a word boundary and the request text is not repeated in the final prompt',async()=>{
+  const request='crie o banco de dados, um usuario demo com a senha e verifique se o fluxo de acesso está funcionando direito';
+  const title=smartTitle(request);
+  assert.ok(title.length<=82,title);assert.match(title,/…$/);
+  assert.equal(title.replace(/…$/,'').endsWith('ace'),false,'must not cut inside "acesso"');
+  assert.ok(request.startsWith(title.replace(/…$/,'')),title);
+  assert.equal(smartTitle('Corrigir o login. Depois ajustar o menu.'),'Corrigir o login');
+  assert.equal(smartTitle(''),'');
+  const refined=await new MockPromptRefiner().refine({request,workspaceName:'demo'});
+  const occurrences=refined.finalPrompt.split('acesso está funcionando direito').length-1;
+  assert.equal(occurrences,1,'the part of the request after the title must appear once (summary), not in objective/scope too');
+  assert.match(refined.finalPrompt,/## Resumo\ncrie o banco/);
 });

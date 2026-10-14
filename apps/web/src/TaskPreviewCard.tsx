@@ -8,7 +8,7 @@ type Mode={mode:'mock'|'real';forced:boolean;entries:{key:string;provider:string
 const PREVIEWABLE=['approved_waiting_action','manual_review_preserved','failed_preserved'];
 const ADJUSTABLE=['approved_waiting_action','manual_review_preserved'];
 /** Uma task pode receber ajuste quando o ambiente está preservado e ela não pertence a uma missão. */
-export const canAdjustTask=(task:{status:string;missionId?:string|null},envStatus:string)=>!task.missionId&&ADJUSTABLE.includes(envStatus)&&['approved','needs_fix'].includes(task.status);
+export const canAdjustTask=(task:{status:string;missionId?:string|null},envStatus:string,hasAttention=false)=>!task.missionId&&(hasAttention?[...ADJUSTABLE,'failed_preserved']:ADJUSTABLE).includes(envStatus)&&(hasAttention?['approved','needs_fix','needs_manual_review','failed']:['approved','needs_fix']).includes(task.status);
 const PREFILL_EVENT='orq:prefill-adjust';
 /** Rascunho de correção a partir dos erros capturados no preview (PHP Fatal error, HTTP 5xx...). */
 export const buildPreviewErrorDraft=(errors:string[])=>`Ao abrir o preview apareceram estes erros:\n${errors.map(e=>`- ${e}`).join('\n')}\n\nCorrija a causa de cada um e confirme rodando o fluxo afetado no banco de teste (variáveis ORQ_DB_*).\n\nComplemente aqui o que mais precisa mudar:\n`.slice(0,4000);
@@ -99,12 +99,12 @@ export function PreviewAdjustCard({baseUrl,idKey,canPreview,canAdjust,workspaceI
   </section>;
 }
 
-type TaskProps={task:{id:string;status:string;workspaceId?:string;missionId?:string|null;configSnapshot?:any};environment:any;onRefresh:()=>void;notify:Notify};
+type TaskProps={task:{id:string;status:string;workspaceId?:string;missionId?:string|null;configSnapshot?:any;attention?:any};environment:any;onRefresh:()=>void;notify:Notify};
 
 export default function TaskPreviewCard({task,environment,onRefresh,notify}:TaskProps){
   const envStatus=environment?.environmentStatus||task.status;
   const canPreview=Boolean(environment?.worktreePath)&&PREVIEWABLE.includes(envStatus);
-  const canAdjust=canAdjustTask(task,envStatus);
+  const canAdjust=canAdjustTask(task,envStatus,Boolean(task.attention));
   const developer=(task.configSnapshot?.agentConfigs||[]).find((config:any)=>config.role==='developer');
   return <PreviewAdjustCard baseUrl={`/api/tasks/${task.id}`} idKey={task.id} canPreview={canPreview} canAdjust={canAdjust} workspaceId={task.workspaceId} developerProviderInSnapshot={developer?.provider} noun="task" onRefresh={onRefresh} notify={notify}/>;
 }
