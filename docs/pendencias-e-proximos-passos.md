@@ -61,3 +61,9 @@ Entregues: desfazer aplicação, recuperação após reinício da API, retençã
 O CI do GitHub (windows-latest) passa no commit b2d5ae8: instalação, build, typecheck, 311 testes da API, build da web e `pnpm smoke` (mock, custo zero). As falhas iniciais eram o caminho 8.3 do runner na limpeza de worktrees (corrigido com `canonicalPath`) e EBUSY no teardown de um teste.
 
 Backlog restante: retenção de `audit_logs`; token de acesso (só se `ORQ_ALLOW_LAN=1`); teste real do Planner/Refinador pela API da Anthropic com chave verdadeira; adaptador do Cursor (fora do escopo por ora).
+
+## Atualização 2026-10-14 (noite): Developer que se verifica
+
+O Developer agora pode executar `php` e recebe um banco MySQL descartável por task/missão (login `orquestradoria` restrito a `orq_*`), com instrução de rodar os scripts, ler o erro real e corrigir antes de terminar. Detalhes: docs/project-database.md. Validado contra um MySQL temporário (14 verificações, incluindo isolamento). **Pendente do usuário:** rodar `pnpm db:setup` uma vez (o root do MySQL do XAMPP tem senha).
+
+Ainda não feito: parar com diagnóstico quando dois ciclos seguidos repetem o mesmo problema, e fazer o Tester executar os scripts de verificação do projeto (hoje quem executa é o Developer).

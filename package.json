@@ -12,6 +12,7 @@
     "test": "pnpm -r build && pnpm --filter @orchestrator/api test",
     "lint": "pnpm -r lint",
     "smoke": "node scripts/smoke.mjs",
+    "db:setup": "pnpm --filter @orchestrator/api run db:setup",
     "predev": "pnpm build"
   },
   "devDependencies": {

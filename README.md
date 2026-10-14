@@ -76,6 +76,7 @@ Fluxo: **workspace → task → acompanhar → preview → ajuste → aplicar**.
 - **Preview** e **Solicitar ajuste** (linguagem natural, retoma do Developer no mesmo worktree) tanto na **task** quanto na **missão** (um ajuste de missão vira uma nova etapa "Ajuste N" no mesmo worktree compartilhado). A branch principal não é tocada.
 - Depois de **criar um projeto a partir de uma ideia**, a tela abre direto o workspace com a missão aberta ("Gerar plano").
 - **Custos** (menu *Custos*): simulador (CLI e API; Claude, Codex e Cursor informativo), recomendação do modelo mais barato por papel com botão "Aplicar configuração econômica", gasto real por modelo/papel/dia e tabela de preços oficial. O custo de cada execução é calculado por **tokens × tabela de preços** (o valor que o CLI informa é só conferência: para modelos novos ele erra). Detalhes e fontes em [docs/cost-simulator.md](docs/cost-simulator.md).
+- **Banco MySQL de teste** (*Configurações*): login próprio que só enxerga bancos descartáveis orq_*; o Developer roda os scripts que escreve (PHP, node), lê o erro real e corrige. Configuração única com `pnpm db:setup`. Detalhes em [docs/project-database.md](docs/project-database.md).
 - Modelo mais barato hoje: Developer = `claude-haiku-5-5` (o alias `haiku` do CLI resolve para o Haiku 4.5, ~10x mais caro); Reviewer = `gpt-5.6-luna`.
 
 ### Iniciar: mock (sem custo) ou real

@@ -150,7 +150,7 @@ async function main(){
     await page.locator('aside').getByText('Configurações').first().click();
     await page.waitForSelector('.system-panel',{timeout:15000});
     const titles=await page.locator('.system-panel .panel-title span').allInnerTexts();
-    for(const wanted of ['LIMITES DE GASTO','BACKUP DO BANCO','DISCO E LIMPEZA','RETENÇÃO DE DADOS ANTIGOS','REDE'])check(titles.includes(wanted),`Configurações tem "${wanted}"`);
+    for(const wanted of ['LIMITES DE GASTO','BACKUP DO BANCO','DISCO E LIMPEZA','RETENÇÃO DE DADOS ANTIGOS','BANCO MYSQL DOS PROJETOS','REDE'])check(titles.includes(wanted),`Configurações tem "${wanted}"`);
     await page.locator('aside').getByText('Workspaces').first().click();
     await page.locator('.workspace-card').filter({hasText:'smoke-projeto'}).first().click();
     await page.waitForSelector('.history-board',{timeout:15000});

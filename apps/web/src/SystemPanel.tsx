@@ -4,6 +4,7 @@ import './costs.css';
 
 type Notify=(message:string,tone?:'success'|'error'|'info')=>void;
 type Budget={settings:{dailyUsd:number;monthlyUsd:number;defaultTaskUsd:number};status:{todayUsd:number;monthUsd:number;blocked:boolean;message:string|null}};
+type ProjectDb={configured:boolean;host:string;port:number;user:string;hasPassword:boolean;mysqlBin:string};
 type Retention={config:{eventsDays:number;logsDays:number;artifactsDays:number;rawProviderResponsesDays:number};plan:{events:number;logExecutions:number;rawExecutions:number;artifacts:number;estimatedBytes:number};auto:boolean};
 type Status={network:{bindHost:string;lanAllowed:boolean};db:{path:string;sizeBytes:number};backups:{dir:string;keep:number;count:number;latest:{file:string;sizeBytes:number;createdAt:string}|null;items:{file:string;sizeBytes:number;createdAt:string}[]};worktrees:{roots:string[];sizeBytes:number;orphans:{path:string;sizeBytes:number;reason:string}[];orphanBytes:number}};
 
@@ -12,7 +13,11 @@ const when=(iso:string)=>new Date(iso).toLocaleString('pt-BR',{day:'2-digit',mon
 async function call(method:string,url:string,body?:unknown){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'A solicitação falhou.');return d;}
 
 export default function SystemPanel({notify}:{notify:Notify}){
-  const[budget,setBudget]=useState<Budget|null>(null),[draft,setDraft]=useState({dailyUsd:'',monthlyUsd:'',defaultTaskUsd:''}),[status,setStatus]=useState<Status|null>(null),[retention,setRetention]=useState<Retention|null>(null),[retDraft,setRetDraft]=useState({eventsDays:'',logsDays:'',artifactsDays:'',rawProviderResponsesDays:''}),[busy,setBusy]=useState('');
+  const[budget,setBudget]=useState<Budget|null>(null),[draft,setDraft]=useState({dailyUsd:'',monthlyUsd:'',defaultTaskUsd:''}),[status,setStatus]=useState<Status|null>(null),[retention,setRetention]=useState<Retention|null>(null),[retDraft,setRetDraft]=useState({eventsDays:'',logsDays:'',artifactsDays:'',rawProviderResponsesDays:''}),[busy,setBusy]=useState(''),[pdb,setPdb]=useState<ProjectDb|null>(null),[pdbDraft,setPdbDraft]=useState({host:'',port:'',user:'',password:'',mysqlBin:''}),[pdbResult,setPdbResult]=useState<{ok:boolean;message:string}|null>(null);
+  useEffect(()=>{void call('GET','/api/settings/project-database').then((value:ProjectDb)=>{setPdb(value);setPdbDraft({host:value.host,port:String(value.port),user:value.user,password:'',mysqlBin:value.mysqlBin});}).catch(()=>setPdb(null));},[]);
+  const savePdb=async()=>{setBusy('pdb');try{const value:ProjectDb=await call('PUT','/api/settings/project-database',{host:pdbDraft.host,port:Number(pdbDraft.port),user:pdbDraft.user,password:pdbDraft.password,mysqlBin:pdbDraft.mysqlBin});setPdb(value);setPdbDraft(d=>({...d,password:''}));setPdbResult(null);notify('Configuração do banco salva.','success');}catch(error){notify(error instanceof Error?error.message:'Não foi possível salvar.','error');}finally{setBusy('');}};
+  const testPdb=async()=>{setBusy('pdbtest');try{setPdbResult(await fetch('/api/settings/project-database/test',{method:'POST'}).then(r=>r.json()));}catch{setPdbResult({ok:false,message:'A API não respondeu.'});}finally{setBusy('');}};
+  const sweepPdb=async()=>{setBusy('pdbsweep');try{const r=await call('POST','/api/settings/project-database/sweep');notify(r.dropped.length?`${r.dropped.length} banco(s) de teste removido(s).`:'Nenhum banco de teste sobrando.','success');}catch(error){notify(error instanceof Error?error.message:'Não foi possível limpar.','error');}finally{setBusy('');}};
   const load=useCallback(async()=>{
     try{const b:Budget=await call('GET','/api/settings/budget');setBudget(b);setDraft({dailyUsd:String(b.settings.dailyUsd),monthlyUsd:String(b.settings.monthlyUsd),defaultTaskUsd:String(b.settings.defaultTaskUsd)});}catch{setBudget(null);}
     try{setStatus(await call('GET','/api/maintenance/status'));}catch{setStatus(null);}
@@ -88,6 +93,21 @@ export default function SystemPanel({notify}:{notify:Notify}){
         </div>
         <p>Elegível agora: {retention.plan.events} evento(s), {retention.plan.logExecutions} log(s), {retention.plan.rawExecutions} resposta(s) bruta(s), {retention.plan.artifacts} artefato(s).</p>
         <button className="secondary" disabled={!retDirty||busy==='retention'} onClick={saveRetentionConfig}>{busy==='retention'?'Salvando…':'Salvar prazos'}</button></>}
+    </section>
+    <section className="panel cost-section">
+      <div className="panel-title"><span>BANCO MYSQL DOS PROJETOS</span><button className="secondary" disabled={!pdb?.configured||busy==='pdbtest'} onClick={testPdb}>{busy==='pdbtest'?'Testando…':'Testar conexão'}</button></div>
+      <p className="muted">Login usado pelas tasks para criar um banco de teste descartável (<code>orq_…</code>) e se verificarem sozinhas. Ele só enxerga bancos <code>orq_*</code>, nunca o banco real de um projeto. Os bancos de teste são apagados quando a task é aplicada ou descartada.</p>
+      {!pdb?<p className="muted">Carregando…</p>:<>
+        {!pdb.configured&&<div className="notice warning"><strong>Ainda não configurado</strong><span>Rode <code>pnpm db:setup</code> no terminal (ele pede a senha do root do MySQL uma vez e cria o login sozinho) ou preencha os campos abaixo.</span></div>}
+        {pdbResult&&<div className={`notice ${pdbResult.ok?'success':'warning'}`}><span>{pdbResult.message}</span></div>}
+        <div className="cost-form">
+          <label>Host<input value={pdbDraft.host} onChange={e=>setPdbDraft({...pdbDraft,host:e.target.value})}/></label>
+          <label>Porta<input value={pdbDraft.port} onChange={e=>setPdbDraft({...pdbDraft,port:e.target.value})} inputMode="numeric"/></label>
+          <label>Usuário<input value={pdbDraft.user} onChange={e=>setPdbDraft({...pdbDraft,user:e.target.value})}/></label>
+          <label>Senha<input type="password" autoComplete="new-password" value={pdbDraft.password} onChange={e=>setPdbDraft({...pdbDraft,password:e.target.value})} placeholder={pdb.hasPassword?'•••••••• (já definida; deixe vazio para manter)':'senha do login'}/></label>
+          <label>Programa mysql<input value={pdbDraft.mysqlBin} onChange={e=>setPdbDraft({...pdbDraft,mysqlBin:e.target.value})}/></label>
+        </div>
+        <div className="button-row"><button className="primary" disabled={busy==='pdb'} onClick={savePdb}>{busy==='pdb'?'Salvando…':'Salvar'}</button><button className="secondary" disabled={!pdb.configured||busy==='pdbsweep'} onClick={sweepPdb}>{busy==='pdbsweep'?'Limpando…':'Limpar bancos de teste sobrando'}</button></div></>}
     </section>
     <section className="panel cost-section">
       <div className="panel-title"><span>REDE</span></div>
