@@ -17,6 +17,11 @@ if /i not "%CONFIRMA%"=="SIM" (
 )
 set ORQ_FORCE_MOCK=
 rem Planner de missao real (Claude Haiku 5.5, ~US$ 0,01 por plano) a menos que voce ja tenha definido outro.
+if not "%ANTHROPIC_API_KEY%"=="" (
+  if "%MISSION_PLANNER_PROVIDER%"=="" set MISSION_PLANNER_PROVIDER=anthropic
+  if "%PROMPT_REFINER_PROVIDER%"=="" set PROMPT_REFINER_PROVIDER=anthropic
+  echo   Chave da Anthropic encontrada: Planner e Refinador usam a API direta - cerca de 30x mais barato.
+)
 if "%MISSION_PLANNER_PROVIDER%"=="" set MISSION_PLANNER_PROVIDER=claude-code
 if "%MISSION_PLANNER_MODEL%"=="" set MISSION_PLANNER_MODEL=claude-haiku-5-5
 set PORT=4000

@@ -13,7 +13,8 @@ export type {ClaudeArgsInput,ClaudeCapabilities,ClaudeCodeConfig,ClaudeDeveloper
 export {buildWindowsCmdInvocation,createCliSpawn,prepareCliInvocation,resolveWindowsCmdTarget,runCliProcess} from './cli-process.js';
 export type {CliSpawn,CommandInvocation,CliProcessResult} from './cli-process.js';
 export {CommandTesterAdapter,buildTesterSummary,browserPlan,detectProjectProfile,normalizeAssignedFiles} from './tester.js';
-export {ClaudeCodeMissionPlanner,normalizeMissionPlannerOutput} from './mission-planner.js';
+export {ClaudeCodeMissionPlanner,buildMissionPlannerPrompt,normalizeMissionPlannerOutput} from './mission-planner.js';
+export {AnthropicMissionPlanner} from './anthropic-mission-planner.js';
 export {parseClaudeStructuredText} from './claude.js';
 export {claudeUsageDetails,extractClaudeUsage} from './claude-usage.js';
 export {finalModelText,listWorkspaceChanges,recoverDeveloperResult} from './claude-recovery.js';

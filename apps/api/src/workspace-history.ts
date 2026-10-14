@@ -18,6 +18,7 @@ const ATTENTION_ENV=['failed_preserved','manual_review_preserved','apply_conflic
 export function classifyPhase(status:string,environmentStatus?:string|null):HistoryPhase{
   if(environmentStatus==='applied')return{group:'done',label:'Aplicada na branch principal'};
   if(environmentStatus==='discarded')return{group:'done',label:'Descartada'};
+  if(environmentStatus==='undone')return{group:'done',label:'Aplicação desfeita'};
   if(RUNNING.includes(status))return{group:'running',label:'Em execução'};
   if(environmentStatus==='approved_waiting_action'||(status==='approved'&&!environmentStatus))return{group:'waiting',label:'Aguardando sua decisão'};
   if(ATTENTION.includes(status)||ATTENTION_ENV.includes(String(environmentStatus)))return{group:'attention',label:status==='cancelled'?'Cancelada':'Precisa de atenção'};

@@ -34,9 +34,27 @@ Atualizado em 2026-10-13. Código: `apps/api/src/security.ts`, `spend-limits.ts`
 - "Limpar órfãs" remove somente: (a) pastas **sem task associada** na raiz estável que **este banco reivindicou** (marca `.orq-owner` com o caminho do banco) e (b) pastas de tasks/missões já **aplicadas ou descartadas**. Nunca remove ambientes aguardando decisão, com falha preservada, ativos ou em conflito; nunca remove na raiz antiga (`%TEMP%\orquestradoria-worktrees`) nem em raiz reivindicada por outro banco; nunca sai das raízes conhecidas.
 - `apps/api/storage/` está no `.gitignore`.
 
+## Recuperação após reinício da API
+
+Ao iniciar, tudo que o banco ainda marca como "em execução" é resto de uma API que caiu ou foi reiniciada (o modo de desenvolvimento reinicia sozinho ao editar o código). Em vez de ficar preso: tasks viram `stalled` (retomáveis, com o worktree preservado), execuções `running` viram `stalled`, missões viram `waiting_human` (etapa parada = `blocked`) e travas antigas são limpas. Use **Retomar**. Auditoria: `task.recovered_after_restart` / `mission.recovered_after_restart`.
+
+## Desfazer aplicação
+
+O Apply é um `git merge --no-ff` na branch base; ele passa a registrar o commit de antes e o de depois (`apply_history`). **Desfazer aplicação** (task e missão, na tela e em `POST /api/{tasks|missions}/:id/undo-apply`) cria um **commit de reversão** (`git revert -m 1`): nada é apagado do histórico e nada é enviado. Só é oferecido quando a branch ainda está no commit do Apply, sem alterações não commitadas e na branch base; senão a tela explica o motivo. Aplicações feitas antes deste recurso não têm registro e não podem ser desfeitas por aqui.
+
+## Retenção de dados
+
+Configurações → Retenção de dados antigos (tabela `retention_config`; padrões: eventos 30 dias, logs/saídas 30, respostas brutas 14, artefatos 90). Só poda dados de tasks **terminadas** (aplicadas, descartadas, desfeitas ou canceladas) e mais antigos que o prazo; nunca toca tasks aguardando decisão, com falha preservada ou em execução, nem a trilha de auditoria. Roda uma vez por dia **depois do backup** (`ORQ_AUTO_RETENTION=0` desliga) ou manualmente com prévia do que será apagado.
+
+## Planner e Refinador pela API direta da Anthropic
+
+Com `ANTHROPIC_API_KEY` definida, `iniciar-real.cmd` usa `MISSION_PLANNER_PROVIDER=anthropic` e `PROMPT_REFINER_PROVIDER=anthropic` (modelo padrão `claude-haiku-5-5`): uma única chamada de ~1–2 mil tokens (≈ US$ 0,0005) em vez de uma sessão do Claude Code com ~50 mil tokens de cache (≈ US$ 0,012). Sem chave, o Planner usa o Claude Code e o Refinador cai para mock. O custo entra no painel de Custos (`ai_usage`).
+
+## Testes e CI
+
+`pnpm smoke` sobe API + web em modo mock forçado com banco temporário e percorre a interface num navegador real (projeto → plano → execução → preview → ajuste → apply → desfazer + páginas Custos/Configurações). Custo zero; feche o sistema antes (usa as portas 4000/5173). `.github/workflows/ci.yml` roda build, typecheck, testes da API, build da web e o smoke num runner Windows (**ainda não executado no GitHub**: a primeira rodada pode pedir ajustes).
+
 ## Pendências
 
-- Botão "Desfazer aplicação" e recuperação de tasks interrompidas por reinício da API.
-- Teste de fumaça automatizado da interface e CI.
-- Retenção/limpeza automática de eventos, logs e artifacts antigos.
 - Autenticação por token (só necessária se `ORQ_ALLOW_LAN=1`).
+- Retenção do `audit_logs` (hoje mantido para sempre).

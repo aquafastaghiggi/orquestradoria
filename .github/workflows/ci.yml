@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # Windows: é onde o sistema roda (caminhos, .cmd do Claude/Codex, Git para Windows).
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Identidade do Git para os testes
+        run: |
+          git config --global user.name ci
+          git config --global user.email ci@localhost
+          git config --global init.defaultBranch main
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm --filter @orchestrator/api test
+      - run: pnpm --filter @orchestrator/web build
+      - name: Chromium para o teste de fumaça
+        run: pnpm --filter @orchestrator/adapters exec playwright install chromium
+      - name: Teste de fumaça da interface (mock, custo zero)
+        run: pnpm smoke

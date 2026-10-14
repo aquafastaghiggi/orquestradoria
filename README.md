@@ -91,7 +91,7 @@ Os providers padrão (sem configuração) são Claude Code (Developer) e Codex (
 
 ### Segurança e operação
 
-A API é **somente local** (127.0.0.1; rejeita outros hosts/origens), há **tetos de gasto** diário/mensal/por task (padrão US$ 2 / US$ 20 / US$ 0,50), **backup diário automático** do banco e limpeza segura de worktrees órfãs — tudo em *Configurações*. Detalhes e limitações em [docs/security-and-operations.md](docs/security-and-operations.md).
+A API é **somente local** (127.0.0.1; rejeita outros hosts/origens), há **tetos de gasto** diário/mensal/por task (padrão US$ 2 / US$ 20 / US$ 0,50), **backup diário automático** do banco limpeza segura de worktrees órfãs e retenção de dados antigos — tudo em *Configurações*. Também: **desfazer aplicação** (commit de reversão), recuperação de tasks/missões interrompidas por reinício da API e pnpm smoke (teste de fumaça da interface, custo zero). Detalhes e limitações em [docs/security-and-operations.md](docs/security-and-operations.md).
 
 ## Arquitetura
 
