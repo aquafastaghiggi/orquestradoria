@@ -45,3 +45,9 @@ Lembrete: o valor de custo que o Claude CLI informa é inflado (~30x) para o Hai
 1. Abrir `iniciar-real.cmd` (SIM) e conferir a faixa do topo: **Developer: Claude Haiku 5.5**, sem "⚠ caro".
 2. Decidir sobre a missão `teste-processo2`: **RETOMAR MISSÃO** (custa centavos) ou **DESCARTAR MISSÃO** e recomeçar.
 3. Escolher a primeira melhoria (recomendo a nº 1: saída estruturada resiliente) e fechar a investigação de codificação.
+
+## Atualização 2026-10-14
+
+- **Investigação de codificação encerrada (falso positivo do Reviewer).** O diff e o resumo gravados pelo Developer no banco **não** tinham caracteres quebrados, e o arquivo no worktree também está correto; o "vocÃª" veio da leitura do Codex (que no Windows às vezes lê pelo PowerShell antigo; a sonda de ontem pegou uma leitura boa por acaso). Mitigação: o prompt do Reviewer agora explica que mojibake ao ler pelo shell é artefato de exibição e manda confiar na seção Diff / confirmar lendo os bytes como UTF-8.
+- **Melhoria nº 1 entregue (saída estruturada resiliente):** se a resposta final do Claude não vier em JSON mas houver **alterações reais no workspace** (Git) e o texto não disser BLOCKED nem for erro, o resultado do Developer é reconstruído como `COMPLETED` com o aviso `structured_output_recovered` (e auditoria `developer.structured_output_recovered_from_workspace`); Tester e Reviewer validam o conteúdo. Sem alterações, com BLOCKED ou com `CLAUDE_RECOVER_STRUCTURED=0`, continua falhando como antes. Cobertura: `apps/api/src/claude-recovery.test.ts`.
+- A missão `teste-processo2` continua parada no "Ajuste 1" até o usuário decidir (RETOMAR com a correção nova ou DESCARTAR).

@@ -16,6 +16,7 @@ export {CommandTesterAdapter,buildTesterSummary,browserPlan,detectProjectProfile
 export {ClaudeCodeMissionPlanner,normalizeMissionPlannerOutput} from './mission-planner.js';
 export {parseClaudeStructuredText} from './claude.js';
 export {claudeUsageDetails,extractClaudeUsage} from './claude-usage.js';
+export {finalModelText,listWorkspaceChanges,recoverDeveloperResult} from './claude-recovery.js';
 export type {ClaudeUsage} from './claude-usage.js';
 export {verifyAcceptanceCoverage,validateAcceptanceCoveragePlan,ACCEPTANCE_EVIDENCE_TYPES} from './acceptance-coverage.js';
 export type {AcceptanceCoverageResult,AcceptanceCoverageItem,AcceptanceCoverageEvidence,AcceptanceEvidenceType} from './acceptance-coverage.js';
