@@ -16,3 +16,5 @@
 .review-result button.primary{margin-top:8px}
 .preview-errors{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
 .preview-errors .mono{font-size:11px;white-space:pre-wrap;word-break:break-word}
+
+.task-header-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
