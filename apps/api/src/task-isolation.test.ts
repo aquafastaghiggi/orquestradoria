@@ -1,10 +1,10 @@
 import {mkdirSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,execSync} from 'node:child_process';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {TaskIsolationError,TaskIsolationManager,buildTaskBranchName,inspectRepository} from '@orchestrator/workspace';
+import {TaskIsolationError,TaskIsolationManager,buildTaskBranchName,canonicalPath,inspectRepository} from '@orchestrator/workspace';
 
 function git(cwd:string,args:string[]){return execFileSync('git',args,{cwd,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();}
 function fixture(){const root=mkdtempSync(join(tmpdir(),'orquestradoria-isolation-test-'));git(root,['init','-b','main']);git(root,['config','user.email','test@example.invalid']);git(root,['config','user.name','Orquestradoria Test']);writeFileSync(join(root,'README.md'),'base\n');git(root,['add','.']);git(root,['commit','-m','base']);return root;}
@@ -41,3 +41,20 @@ test('diff marks new binary files and truncation as incomplete review',()=>{cons
 test('apply recovery is idempotent after merge and cleanup is safe when worktree or branch are already gone',()=>{const root=fixture();const managed=mkdtempSync(join(tmpdir(),'orquestradoria-managed-'));try{const manager=new TaskIsolationManager({root:managed});const environment=manager.prepare({workspaceId:'workspace-a',taskId:'recovery',title:'Recovery',workspacePath:root});writeFileSync(join(environment.worktreePath!,'recovered.txt'),'applied\n');const first=manager.applyWithRecovery(environment,root,'apply recovery');assert.equal(first.applied,true);assert.equal(first.cleanup.cleanupComplete,true);const second=manager.applyWithRecovery(environment,root,'retry recovery');assert.equal(second.applied,true);assert.equal(second.cleanup.cleanupComplete,true);assert.equal(second.cleanup.worktreeRegistered,false);assert.equal(second.cleanup.worktreePathExists,false);assert.equal(second.cleanup.branchExists,false);}finally{cleanup(root);cleanup(managed);}});
 
 test('recovery tolerates a deregistered worktree and a deleted merged branch',()=>{const root=fixture();const managed=mkdtempSync(join(tmpdir(),'orquestradoria-managed-'));try{const manager=new TaskIsolationManager({root:managed});const environment=manager.prepare({workspaceId:'workspace-a',taskId:'orphan-recovery',title:'Orphan recovery',workspacePath:root});writeFileSync(join(environment.worktreePath!,'orphan.txt'),'orphan\n');manager.apply(environment,root);const deregistered=git(root,['worktree','remove','--force',environment.worktreePath!]);assert.equal(deregistered,'');const deleted=git(root,['branch','-D',environment.taskBranch!]);assert.match(deleted,/.+/);const cleanup=manager.cleanupApplied(environment,root);assert.equal(cleanup.cleanupComplete,true);assert.equal(cleanup.worktreeRegistered,false);assert.equal(cleanup.worktreePathExists,false);assert.equal(cleanup.branchExists,false);}finally{cleanup(root);cleanup(managed);}});
+
+test('worktree cleanup works when the managed root is given by its Windows 8.3 short name (git lists the long one)',()=>{
+  if(process.platform!=='win32')return;
+  const root=fixture();const managed=mkdtempSync(join(tmpdir(),'orquestradoria-managed-with-a-long-name-'));
+  try{
+    const short=execSync(`for %I in ("${managed}") do @echo %~sI`,{encoding:'utf8',shell:'cmd.exe'}).trim();
+    if(!short||short.toLowerCase()===managed.toLowerCase())return; // nomes 8.3 desativados nesta máquina
+    assert.equal(canonicalPath(short),canonicalPath(managed));
+    const manager=new TaskIsolationManager({root:short});
+    const environment=manager.prepare({workspaceId:'w',taskId:'short-name',title:'Short',workspacePath:root});
+    writeFileSync(join(environment.worktreePath!,'x.txt'),'1\n');
+    const result=manager.applyWithRecovery(environment,root,'apply short');
+    assert.equal(result.applied,true);
+    assert.equal(result.cleanup.cleanupComplete,true);
+    assert.equal(result.cleanup.branchExists,false);
+  }finally{cleanup(root);cleanup(managed);}
+});
