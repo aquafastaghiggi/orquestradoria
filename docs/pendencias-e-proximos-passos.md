@@ -54,4 +54,10 @@ Lembrete: o valor de custo que o Claude CLI informa é inflado (~30x) para o Hai
 
 ## Atualização 2026-10-14 (tarde): lista de melhorias concluída
 
-Entregues: desfazer aplicação, recuperação após reinício da API, retenção de dados antigos, Planner/Refinador pela API direta da Anthropic (com ANTHROPIC_API_KEY), teste de fumaça pnpm smoke + CI (.github/workflows/ci.yml, ainda não rodou no GitHub) e correção do teste instável (espera de 30 s pelo servidor). Detalhes em docs/security-and-operations.md. Tudo foi testado em mock/sem custo; o usuário vai refazer os testes reais.
+Entregues: desfazer aplicação, recuperação após reinício da API, retenção de dados antigos, Planner/Refinador pela API direta da Anthropic (com ANTHROPIC_API_KEY), teste de fumaça pnpm smoke + CI (.github/workflows/ci.yml) e correção do teste instável (espera de 30 s pelo servidor). Detalhes em docs/security-and-operations.md. Tudo foi testado em mock/sem custo; o usuário vai refazer os testes reais.
+
+## Atualização 2026-10-14 (noite): CI verde
+
+O CI do GitHub (windows-latest) passa no commit b2d5ae8: instalação, build, typecheck, 311 testes da API, build da web e `pnpm smoke` (mock, custo zero). As falhas iniciais eram o caminho 8.3 do runner na limpeza de worktrees (corrigido com `canonicalPath`) e EBUSY no teardown de um teste.
+
+Backlog restante: retenção de `audit_logs`; token de acesso (só se `ORQ_ALLOW_LAN=1`); teste real do Planner/Refinador pela API da Anthropic com chave verdadeira; adaptador do Cursor (fora do escopo por ora).
