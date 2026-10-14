@@ -22,11 +22,11 @@ export class TaskPreviewManager{
     if(session&&session.status!=='ready'&&session.status!=='starting')this.sessions.delete(taskId);
     return previewView(this.sessions.get(taskId));
   }
-  async start(taskId:string,worktreePath:string,onEvent?:(type:string,payload:Record<string,unknown>)=>void):Promise<TaskPreviewView>{
+  async start(taskId:string,worktreePath:string,onEvent?:(type:string,payload:Record<string,unknown>)=>void,env?:Record<string,string>):Promise<TaskPreviewView>{
     const current=this.sessions.get(taskId);
     if(current?.status==='ready')return previewView(current);
     if(!worktreePath||!existsSync(worktreePath))return{status:'failed',error:'O ambiente isolado da task não existe mais.'};
-    const session=await this.runtime.start(worktreePath,{id:`preview-${taskId}`,onEvent});
+    const session=await this.runtime.start(worktreePath,{id:`preview-${taskId}`,onEvent,env});
     if(session.status!=='ready')return previewView(session);
     this.sessions.set(taskId,session);
     return previewView(session);
