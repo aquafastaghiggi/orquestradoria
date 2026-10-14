@@ -22,7 +22,7 @@ test('plans through the Messages API with the right request and records token us
   assert.equal(seen.body.model,'claude-haiku-5-5');
   assert.ok(seen.body.max_tokens>=1024);
   assert.equal(seen.body.messages[0].content,buildMissionPlannerPrompt(input));
-  assert.match(seen.body.messages[0].content,/FEWEST tasks/);
+  assert.match(seen.body.messages[0].content,/MICRO task/);
   assert.equal(plan.tasks.length,2);
   assert.equal(plan.tasks[0].title,'Criar a página');
   assert.deepEqual(planner.lastUsage,{inputTokens:1200,outputTokens:420});

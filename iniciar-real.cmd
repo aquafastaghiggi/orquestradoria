@@ -24,6 +24,8 @@ if not "%ANTHROPIC_API_KEY%"=="" (
 )
 if "%MISSION_PLANNER_PROVIDER%"=="" set MISSION_PLANNER_PROVIDER=claude-code
 if "%MISSION_PLANNER_MODEL%"=="" set MISSION_PLANNER_MODEL=claude-haiku-5-5
+rem Limite por execucao do Claude: 8 min (o padrao de 3 min estourava em etapas medias).
+if "%CLAUDE_TIMEOUT_MS%"=="" set CLAUDE_TIMEOUT_MS=480000
 set PORT=4000
 echo.
 echo   http://localhost:5173
