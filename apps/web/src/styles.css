@@ -14,3 +14,5 @@
 .eta-bar.small{height:5px}
 .review-issues{margin:8px 0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:4px}
 .review-result button.primary{margin-top:8px}
+.preview-errors{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.preview-errors .mono{font-size:11px;white-space:pre-wrap;word-break:break-word}

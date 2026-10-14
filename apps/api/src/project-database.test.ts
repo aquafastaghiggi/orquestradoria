@@ -60,18 +60,22 @@ test('provisioning grants only orq_* databases, uses the root password only for 
   await assert.rejects(()=>provisionProjectLogin('x',{password:"short'pw"},run),/formato/);
 });
 
-test('sweep drops only managed databases that no longer belong to an active environment',async()=>{
+test('sweep only drops databases registered by THIS instance (another instance or the smoke test can never wipe them)',async()=>{
   const dropped:string[]=[];
   const run:MysqlRunner=async(config,sql)=>{
-    if(sql.startsWith('SHOW DATABASES'))return{ok:true,stdout:'orq_keep1\norq_old1\norq_old2\ninformation_schema\nmysql\n'};
+    if(sql.startsWith('SHOW DATABASES'))return{ok:true,stdout:'orq_mineactive\norq_mineold\norq_foreign\ninformation_schema\nmysql\n'};
     const match=sql.match(/DROP DATABASE IF EXISTS `([^`]+)`/);if(match)dropped.push(match[1]);return{ok:true,stdout:''};
   };
-  const result=await sweepProjectDatabases(cfg,new Set(['orq_keep1']),run);
-  assert.deepEqual(result.dropped.sort(),['orq_old1','orq_old2']);assert.deepEqual(dropped.sort(),['orq_old1','orq_old2']);assert.deepEqual(result.kept,['orq_keep1']);
+  const registered=new Set(['orq_mineactive','orq_mineold','orq_minegone']);
+  const result=await sweepProjectDatabases(cfg,new Set(['orq_mineactive']),registered,run);
+  assert.deepEqual(dropped,['orq_mineold']);assert.deepEqual(result.dropped,['orq_mineold']);
+  assert.deepEqual(result.kept,['orq_mineactive']);assert.deepEqual(result.missing,['orq_minegone']);
+  assert.equal(dropped.includes('orq_foreign'),false,'a database nobody registered must survive');
+  const empty=await sweepProjectDatabases(cfg,new Set(),new Set(),run);
+  assert.deepEqual(empty.dropped,[]);assert.equal(dropped.length,1);
   const down:MysqlRunner=async()=>({ok:false,stdout:'',error:'ERROR 2002'});
-  assert.deepEqual((await sweepProjectDatabases(cfg,new Set(),down)).dropped,[]);
+  assert.deepEqual((await sweepProjectDatabases(cfg,new Set(),registered,down)).dropped,[]);
 });
-
 test('environment, errors and prompt section',async()=>{
   assert.deepEqual(taskDatabaseEnv(cfg,'orq_x'),{ORQ_DB_HOST:'127.0.0.1',ORQ_DB_PORT:'3306',ORQ_DB_USER:'orquestradoria',ORQ_DB_PASSWORD:cfg.password,ORQ_DB_NAME:'orq_x'});
   assert.match(friendlyMysqlError("ERROR 2002 (HY000): Can't connect to MySQL server"),/XAMPP/);

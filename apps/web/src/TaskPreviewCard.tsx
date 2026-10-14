@@ -2,7 +2,7 @@ import React,{useEffect,useState} from 'react';
 
 type Tone='success'|'error'|'info';
 type Notify=(message:string,tone?:Tone)=>void;
-type Preview={status:'stopped'|'ready'|'failed';runtime?:string;url?:string;error?:string};
+type Preview={status:'stopped'|'ready'|'failed';runtime?:string;url?:string;error?:string;errors?:string[]};
 type Mode={mode:'mock'|'real';forced:boolean;entries:{key:string;provider:string}[]};
 
 const PREVIEWABLE=['approved_waiting_action','manual_review_preserved','failed_preserved'];
@@ -10,6 +10,8 @@ const ADJUSTABLE=['approved_waiting_action','manual_review_preserved'];
 /** Uma task pode receber ajuste quando o ambiente está preservado e ela não pertence a uma missão. */
 export const canAdjustTask=(task:{status:string;missionId?:string|null},envStatus:string)=>!task.missionId&&ADJUSTABLE.includes(envStatus)&&['approved','needs_fix'].includes(task.status);
 const PREFILL_EVENT='orq:prefill-adjust';
+/** Rascunho de correção a partir dos erros capturados no preview (PHP Fatal error, HTTP 5xx...). */
+export const buildPreviewErrorDraft=(errors:string[])=>`Ao abrir o preview apareceram estes erros:\n${errors.map(e=>`- ${e}`).join('\n')}\n\nCorrija a causa de cada um e confirme rodando o fluxo afetado no banco de teste (variáveis ORQ_DB_*).\n\nComplemente aqui o que mais precisa mudar:\n`.slice(0,4000);
 /** Monta o rascunho de correção a partir do resultado do Reviewer (o usuário edita e complementa antes de enviar). */
 export function buildFixDraft(review:any):string{
   const issues=Array.isArray(review?.issues)?review.issues:[];
@@ -30,6 +32,7 @@ async function post(url:string,body?:unknown){
 export function PreviewAdjustCard({baseUrl,idKey,canPreview,canAdjust,workspaceId,developerProviderInSnapshot,noun,onRefresh,notify}:{baseUrl:string;idKey:string;canPreview:boolean;canAdjust:boolean;workspaceId?:string;developerProviderInSnapshot?:string;noun:'task'|'missão';onRefresh:()=>void;notify:Notify}){
   const[preview,setPreview]=useState<Preview>({status:'stopped'}),[busy,setBusy]=useState(false),[feedback,setFeedback]=useState(''),[mode,setMode]=useState<Mode|null>(null);
   useEffect(()=>{if(!canPreview){setPreview({status:'stopped'});return;}void fetch(`${baseUrl}/preview`).then(r=>r.json()).then(setPreview).catch(()=>setPreview({status:'stopped'}));},[baseUrl,canPreview]);
+  useEffect(()=>{if(preview.status!=='ready')return;const id=window.setInterval(()=>{void fetch(`${baseUrl}/preview`).then(r=>r.json()).then(setPreview).catch(()=>{});},4000);return()=>window.clearInterval(id);},[baseUrl,preview.status]);
   useEffect(()=>{void fetch(`/api/mode${workspaceId?`?workspaceId=${workspaceId}`:''}`).then(r=>r.json()).then(setMode).catch(()=>setMode(null));},[workspaceId]);
   useEffect(()=>{
     if(!canAdjust)return;
@@ -82,7 +85,7 @@ export function PreviewAdjustCard({baseUrl,idKey,canPreview,canAdjust,workspaceI
         ?<div className="notice success"><strong>Preview ativo ({preview.runtime})</strong><span><a href={preview.url} target="_blank" rel="noopener noreferrer">{preview.url}</a></span></div>
         :preview.status==='failed'?<div className="notice warning"><strong>Preview indisponível</strong><span>{preview.error}</span></div>
         :<p className="muted">Abre a versão desta {noun} a partir do worktree isolado. A branch principal não é tocada.</p>}
-      {preview.status==='ready'
+      {preview.status==='ready'&&preview.errors&&preview.errors.length>0&&<div className="notice warning preview-errors"><strong>Erros detectados no preview</strong>{preview.errors.map((message,index)=><span key={index} className="mono">{message}</span>)}{canAdjust&&<button className="primary" onClick={()=>prefillAdjust(buildPreviewErrorDraft(preview.errors||[]))}>Criar correção a partir destes erros</button>}</div>}      {preview.status==='ready'
         ?<button className="secondary" disabled={busy} onClick={stop}>Parar preview</button>
         :<button className="secondary" disabled={busy} onClick={start}>{busy?'Iniciando…':'Abrir preview'}</button>}
     </>}

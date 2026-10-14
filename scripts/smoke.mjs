@@ -54,7 +54,7 @@ async function main(){
 
   start('api',['--filter','@orchestrator/api','exec','tsx','src/server.ts'],{
     PORT:String(API_PORT),WEB_PORT:String(WEB_PORT),DB_PATH:join(tmp,'smoke.db'),TASK_WORKTREE_ROOT:join(tmp,'worktrees'),ORQ_BACKUP_DIR:join(tmp,'backups'),
-    ORQ_FORCE_MOCK:'1',DEVELOPER_PROVIDER:'mock',REVIEWER_PROVIDER:'mock',TESTER_PROVIDER:'mock',PROMPT_REFINER_PROVIDER:'mock',MISSION_PLANNER_PROVIDER:'mock',
+    ORQ_FORCE_MOCK:'1',ORQ_PROJECT_DB_DISABLED:'1',DEVELOPER_PROVIDER:'mock',REVIEWER_PROVIDER:'mock',TESTER_PROVIDER:'mock',PROMPT_REFINER_PROVIDER:'mock',MISSION_PLANNER_PROVIDER:'mock',
   });
   start('web',['--filter','@orchestrator/web','exec','vite','--port',String(WEB_PORT),'--strictPort'],{ORQ_API_PORT:String(API_PORT)});
   check(await waitFor(`${API}/health`),'API iniciou');

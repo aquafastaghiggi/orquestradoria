@@ -32,3 +32,16 @@ Sem esse login configurado nada muda: as tasks seguem como antes, só que o Deve
   que a task entregou, com o MySQL real).
 - O projeto gerado precisa ler `ORQ_DB_*`; o prompt pede isso, mas o Reviewer deve conferir.
 - A senha do login fica em arquivo local sem criptografia (acesso apenas a bancos de teste, na sua máquina).
+
+## Limpeza segura (registro por instância)
+
+A limpeza só apaga bancos que **esta instância registrou** (tabela `project_databases` do SQLite). Um banco `orq_*` criado por outra
+instância (teste de fumaça, segundo clone) nunca é tocado, e o teste de fumaça roda com o banco de teste desligado
+(`ORQ_PROJECT_DB_DISABLED=1`). Isso corrige um erro real: antes a limpeza apagava qualquer `orq_*` que não conhecesse, e um teste
+de fumaça apagou o banco de uma task.
+
+## Erros do preview viram correção
+
+O servidor PHP do preview loga erros no `stderr` (`PHP Fatal error`, `Warning`, respostas 4xx/5xx). O cartão **Preview e ajustes**
+lista as últimas ocorrências (atualiza a cada 4 s) e oferece **"Criar correção a partir destes erros"**: preenche o campo de
+ajuste, que você complementa e envia ao Developer. O preview recebe as variáveis `ORQ_DB_*` do mesmo banco de teste da task.

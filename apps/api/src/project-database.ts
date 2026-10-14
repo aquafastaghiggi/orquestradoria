@@ -110,19 +110,24 @@ export async function listManagedDatabases(config:ProjectDbConfig,run:MysqlRunne
   if(!result.ok)return null;
   return result.stdout.split(/\r?\n/).map(line=>line.trim()).filter(isManagedDatabaseName);
 }
-/** Apaga bancos orq_* que não pertencem mais a nenhuma task/missão com ambiente ativo. */
-export async function sweepProjectDatabases(config:ProjectDbConfig,activeNames:Set<string>,run:MysqlRunner=runMysql){
+/**
+ * Apaga bancos de teste que não pertencem mais a nenhuma task/missão com ambiente ativo.
+ * `registered` é o registro desta instância: só esses nomes podem ser apagados. Bancos de outra instância
+ * (teste automatizado, outro clone) nunca são tocados. `missing` = registrados que já não existem no MySQL.
+ */
+export async function sweepProjectDatabases(config:ProjectDbConfig,activeNames:Set<string>,registered:Set<string>,run:MysqlRunner=runMysql){
   const existing=await listManagedDatabases(config,run);
-  if(!existing)return{ok:false,dropped:[] as string[],kept:[] as string[]};
-  const dropped:string[]=[],kept:string[]=[];
-  for(const name of existing){
+  if(!existing)return{ok:false,dropped:[] as string[],kept:[] as string[],missing:[] as string[]};
+  const present=new Set(existing);
+  const dropped:string[]=[],kept:string[]=[],missing:string[]=[];
+  for(const name of registered){
+    if(!present.has(name)){missing.push(name);continue;}
     if(activeNames.has(name)){kept.push(name);continue;}
     const result=await dropTaskDatabase(config,name,run);
     (result.ok?dropped:kept).push(name);
   }
-  return{ok:true,dropped,kept};
+  return{ok:true,dropped,kept,missing};
 }
-
 export const generatePassword=()=>randomBytes(18).toString('base64url');
 
 /** Cria (ou renova) o login do Orquestradoria usando a senha do root, que só passa por aqui e nunca é gravada. */

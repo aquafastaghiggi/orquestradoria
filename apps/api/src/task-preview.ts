@@ -1,7 +1,7 @@
 import {existsSync} from 'node:fs';
 import {RuntimeDetector,RuntimeSessionManager,type RuntimeSession} from '@orchestrator/workspace';
 
-export interface TaskPreviewView{status:'stopped'|'ready'|'failed';runtime?:string;url?:string;error?:string;startedAt?:string;}
+export interface TaskPreviewView{status:'stopped'|'ready'|'failed';runtime?:string;url?:string;error?:string;startedAt?:string;errors?:string[];}
 
 const ADJUSTABLE_TASK_STATUS=['approved','needs_fix'];
 const ADJUSTABLE_ENVIRONMENT=['approved_waiting_action','manual_review_preserved'];
@@ -10,7 +10,7 @@ export const MAX_ADJUSTMENT_CHARS=4000;
 export function previewView(session?:RuntimeSession):TaskPreviewView{
   if(!session||session.status==='stopped')return{status:'stopped'};
   if(session.status==='failed')return{status:'failed',runtime:session.profile.type,error:session.stderr||'Runtime indisponível'};
-  return{status:'ready',runtime:session.profile.type,url:session.baseUrl+(session.profile.entryPath&&session.profile.entryPath!=='/'?session.profile.entryPath:''),startedAt:session.startedAt};
+  return{status:'ready',runtime:session.profile.type,errors:extractPreviewErrors(session.stderr,6,Boolean(session.profile.entryPath&&session.profile.entryPath!=='/')),url:session.baseUrl+(session.profile.entryPath&&session.profile.entryPath!=='/'?session.profile.entryPath:''),startedAt:session.startedAt};
 }
 
 /** Mantém um runtime local por task, sempre apontando para o worktree isolado (nunca para a branch principal). */
@@ -59,4 +59,23 @@ export function appendAdjustmentRequest(description:string,feedback:string,round
 
 export function adjustmentRound(description:string){
   return (String(description).match(/ajuste solicitado pelo usuário \(rodada \d+\)/g)||[]).length+1;
+}
+
+/**
+ * Lê o stderr do servidor do preview (PHP imprime Fatal error/Warning e respostas 4xx/5xx) e devolve as últimas ocorrências
+ * distintas, já sem data e sem a pasta temporária longa, para o usuário transformar em um pedido de correção.
+ */
+export function extractPreviewErrors(stderr:string|undefined,limit=6,ignoreRoot=false):string[]{
+  const text=String(stderr||'');
+  if(!text.trim())return[];
+  const entries:string[]=[];
+  for(const part of text.split(/^\[[A-Z][a-z]{2} [A-Z][a-z]{2} +\d+ \d\d:\d\d:\d\d \d{4}\] /m)){
+    const entry=part.trim();
+    if(/^PHP (Fatal error|Parse error|Warning|Notice|Deprecated)/.test(entry)){entries.push(entry);continue;}
+    const request=entry.match(/^[\d.]+:\d+ \[([45]\d\d)\]: (\w+) (\S+)/);
+    if(request&&!(ignoreRoot&&request[3]==='/'))entries.push(`HTTP ${request[1]} ${request[2]} ${request[3]}`);
+  }
+  const seen=new Set<string>();
+  const unique=entries.filter(item=>seen.has(item)?false:(seen.add(item),true));
+  return unique.slice(-limit).map(item=>item.replace(/\s*\n\s*/g,' ').slice(0,500));
 }
