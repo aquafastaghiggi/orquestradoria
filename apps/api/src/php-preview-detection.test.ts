@@ -69,14 +69,14 @@ test('extractPreviewErrors keeps php errors and 4xx/5xx requests, drops dates, n
 });
 
 test('a real php preview reports the fatal error the page hit',async()=>{
-  const root=project({'index.php':'<?php throw new RuntimeException("falha real 987");'});
+  const root=project({'index.php':'<?php http_response_code(500); throw new RuntimeException("falha real 987");'});
   const detector=new RuntimeDetector({phpFallback:true});
   try{
     if(!detector.detect(root).command)return;
     const manager=new RuntimeSessionManager(detector);
-    const session=await manager.start(root);
+    const session=await manager.start(root,{anyResponseIsReady:true});
     try{
-      assert.equal(session.status,'ready');
+      assert.equal(session.status,'ready','a page that answers 500 must still open the preview so the error is visible');
       await fetch(session.baseUrl+'/');await new Promise(resolve=>setTimeout(resolve,400));
       const errors=previewView(session).errors||[];
       assert.ok(errors.some(e=>/Fatal error.*falha real 987/.test(e)),JSON.stringify(errors));

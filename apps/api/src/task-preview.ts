@@ -26,7 +26,7 @@ export class TaskPreviewManager{
     const current=this.sessions.get(taskId);
     if(current?.status==='ready')return previewView(current);
     if(!worktreePath||!existsSync(worktreePath))return{status:'failed',error:'O ambiente isolado da task não existe mais.'};
-    const session=await this.runtime.start(worktreePath,{id:`preview-${taskId}`,onEvent,env});
+    const session=await this.runtime.start(worktreePath,{id:`preview-${taskId}`,onEvent,env,anyResponseIsReady:true});
     if(session.status!=='ready')return previewView(session);
     this.sessions.set(taskId,session);
     return previewView(session);
