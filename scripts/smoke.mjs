@@ -6,7 +6,7 @@
  * de API >= 400 inesperada ou passo que não aconteça.
  *
  * Uso: pnpm smoke   (precisa do Chromium: pnpm --filter @orchestrator/adapters exec playwright install chromium)
- * Pré-condição: nada rodando nas portas 4000 e 5173 (feche o sistema antes).
+ * Usa portas próprias (4400/5400; SMOKE_API_PORT/SMOKE_WEB_PORT mudam), então pode rodar com o sistema normal aberto.
  */
 import {spawn,execFileSync} from 'node:child_process';
 import {createRequire} from 'node:module';
@@ -20,7 +20,8 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const require=createRequire(join(root,'packages','adapters','package.json'));
 const {chromium}=require('playwright');
 const isWin=process.platform==='win32';
-const API='http://127.0.0.1:4000',WEB='http://localhost:5173';
+const API_PORT=Number(process.env.SMOKE_API_PORT||4400),WEB_PORT=Number(process.env.SMOKE_WEB_PORT||5400);
+const API=`http://127.0.0.1:${API_PORT}`,WEB=`http://localhost:${WEB_PORT}`;
 
 const steps=[];const failures=[];
 const pass=(name)=>{steps.push(name);console.log('  ✓',name);};
@@ -49,13 +50,13 @@ const git=(cwd,...args)=>execFileSync('git',['-c','user.name=smoke','-c','user.e
 
 async function main(){
   console.log('Teste de fumaça (mock, custo zero)\n');
-  if(!(await portFree(4000))||!(await portFree(5173))){console.error('As portas 4000/5173 estão ocupadas. Feche o sistema (janela do iniciar-*.cmd) e rode de novo.');process.exit(2);}
+  if(!(await portFree(API_PORT))||!(await portFree(WEB_PORT))){console.error(`As portas ${API_PORT}/${WEB_PORT} do teste estão ocupadas (defina SMOKE_API_PORT/SMOKE_WEB_PORT). O sistema normal (4000/5173) pode ficar aberto.`);process.exit(2);}
 
   start('api',['--filter','@orchestrator/api','exec','tsx','src/server.ts'],{
-    PORT:'4000',DB_PATH:join(tmp,'smoke.db'),TASK_WORKTREE_ROOT:join(tmp,'worktrees'),ORQ_BACKUP_DIR:join(tmp,'backups'),
+    PORT:String(API_PORT),WEB_PORT:String(WEB_PORT),DB_PATH:join(tmp,'smoke.db'),TASK_WORKTREE_ROOT:join(tmp,'worktrees'),ORQ_BACKUP_DIR:join(tmp,'backups'),
     ORQ_FORCE_MOCK:'1',DEVELOPER_PROVIDER:'mock',REVIEWER_PROVIDER:'mock',TESTER_PROVIDER:'mock',PROMPT_REFINER_PROVIDER:'mock',MISSION_PLANNER_PROVIDER:'mock',
   });
-  start('web',['--filter','@orchestrator/web','exec','vite','--port','5173','--strictPort'],{});
+  start('web',['--filter','@orchestrator/web','exec','vite','--port',String(WEB_PORT),'--strictPort'],{ORQ_API_PORT:String(API_PORT)});
   check(await waitFor(`${API}/health`),'API iniciou');
   check(await waitFor(WEB),'Web iniciou');
   if(failures.length)throw new Error('Servidores não iniciaram');
@@ -132,6 +133,13 @@ async function main(){
     check(!existsSync(join(project,'app.js')),'Desfazer removeu o arquivo aplicado');
     check(/Revert/.test(git(project,'log','--format=%s','-n','1')),'Desfazer criou um commit de reversão (histórico preservado)');
     check(git(project,'status','--porcelain')==='','Pasta do projeto limpa após desfazer');
+    // 6b) refazer aplicação (reverte a reversão)
+    const redoButton=undo.getByRole('button',{name:'Refazer aplicação'});
+    await redoButton.waitFor({timeout:15000});
+    await redoButton.click();
+    await undo.getByRole('button',{name:'Desfazer aplicação'}).waitFor({timeout:30000});
+    check(existsSync(join(project,'app.js')),'Refazer restaurou o arquivo na pasta do projeto');
+    check(git(project,'status','--porcelain')==='','Pasta do projeto limpa após refazer');
 
     // 7) páginas de apoio
     await page.keyboard.press('Escape').catch(()=>{});
@@ -147,6 +155,8 @@ async function main(){
     await page.locator('.workspace-card').filter({hasText:'smoke-projeto'}).first().click();
     await page.waitForSelector('.history-board',{timeout:15000});
     pass('Quadro de trabalho do workspace carrega');
+    const waiting=(await page.locator('.summary-card').filter({hasText:'Aguardando ação'}).locator('strong').first().innerText()).trim();
+    check(waiting==='0','Painel não mostra tasks "aguardando ação" depois do Apply',`valor: ${waiting}`);
 
     check(pageErrors.length===0,'Nenhum erro JavaScript na página',pageErrors.join(' | '));
     check(apiErrors.length===0,'Nenhuma resposta de API >= 400',apiErrors.join(' | '));

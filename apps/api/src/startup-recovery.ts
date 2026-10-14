@@ -7,6 +7,8 @@ export interface RecoveryReport{
   executions:number;
   missions:{id:string;steps:number}[];
   locksCleared:number;
+  /** Tasks filhas de missão cujo status de ambiente ficou para trás depois de aplicar/desfazer/descartar a missão. */
+  missionTasksSynced:number;
 }
 
 const hasTable=(db:Database.Database,name:string)=>Boolean(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name));
@@ -18,7 +20,7 @@ const hasTable=(db:Database.Database,name:string)=>Boolean(db.prepare("SELECT na
  */
 export function recoverInterruptedWork(db:Database.Database,now=new Date()):RecoveryReport{
   const stamp=now.toISOString();
-  const report:RecoveryReport={tasks:[],executions:0,missions:[],locksCleared:0};
+  const report:RecoveryReport={tasks:[],executions:0,missions:[],locksCleared:0,missionTasksSynced:0};
   const message='A API foi reiniciada durante a execução. O trabalho feito até aqui foi preservado; use Retomar.';
   db.transaction(()=>{
     if(hasTable(db,'tasks')){
@@ -41,6 +43,9 @@ export function recoverInterruptedWork(db:Database.Database,now=new Date()):Reco
         db.prepare("UPDATE missions SET status='waiting_human',environmentWarning=?,updatedAt=? WHERE id=?").run(message,stamp,mission.id);
         report.missions.push({id:mission.id,steps});
       }
+    }
+    if(hasTable(db,'tasks')&&hasTable(db,'missions')){
+      report.missionTasksSynced=db.prepare("UPDATE tasks SET environmentStatus=(SELECT environmentStatus FROM missions WHERE missions.id=tasks.missionId),updatedAt=? WHERE missionId IS NOT NULL AND environmentStatus IN ('approved_waiting_action','active','manual_review_preserved','failed_preserved') AND (SELECT environmentStatus FROM missions WHERE missions.id=tasks.missionId) IN ('applied','undone','discarded')").run(stamp).changes;
     }
     if(hasTable(db,'locks'))report.locksCleared=db.prepare('DELETE FROM locks').run().changes;
   })();

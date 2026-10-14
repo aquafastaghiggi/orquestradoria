@@ -55,3 +55,31 @@ export function undoApply(db:Database.Database,record:ApplyRecord,workspacePath:
   db.prepare('UPDATE apply_history SET undoneAt=?,undoSha=? WHERE id=?').run(now.toISOString(),revertSha,record.id);
   return{revertSha};
 }
+
+/**
+ * Refazer: depois de desfazer, `undoSha` é o commit de reversão. Reverter a reversão restaura as alterações (novo commit, nada é
+ * reescrito) e registra uma nova aplicação, que pode ser desfeita de novo. Mesmas travas de segurança do desfazer.
+ */
+export function checkRedo(record:ApplyRecord|undefined,workspacePath:string):UndoCheck{
+  if(!record||!record.undoneAt||!record.undoSha)return{available:false,reason:'Não há aplicação desfeita para refazer.'};
+  try{
+    const branch=git(workspacePath,['rev-parse','--abbrev-ref','HEAD']);
+    if(branch!==record.baseBranch)return{available:false,reason:`A pasta do projeto está na branch "${branch}", não em "${record.baseBranch}". Volte para "${record.baseBranch}" para refazer.`};
+    if(gitHead(workspacePath)!==record.undoSha)return{available:false,reason:'Houve novos commits depois do desfazer. Refazer automaticamente poderia misturar com trabalho posterior; faça o revert da reversão manualmente.'};
+    if(git(workspacePath,['status','--porcelain','--untracked-files=no']))return{available:false,reason:'Há alterações não commitadas na pasta do projeto. Commite ou descarte antes de refazer.'};
+    return{available:true};
+  }catch(error){return{available:false,reason:`Não foi possível verificar o Git: ${error instanceof Error?error.message:String(error)}`};}
+}
+
+export function redoApply(db:Database.Database,record:ApplyRecord,workspacePath:string,now=new Date()):{redoSha:string}{
+  const check=checkRedo(record,workspacePath);
+  if(!check.available)throw Object.assign(new Error(check.reason||'Não é possível refazer.'),{status:409,code:'redo_unavailable'});
+  try{git(workspacePath,['revert','--no-edit',record.undoSha!],true);}
+  catch(error){
+    try{git(workspacePath,['revert','--abort']);}catch{/* nada a abortar */}
+    throw Object.assign(new Error(`O Git não conseguiu refazer automaticamente: ${error instanceof Error?error.message.split('\n')[0]:String(error)}`),{status:409,code:'redo_conflict'});
+  }
+  const redoSha=gitHead(workspacePath);
+  db.prepare('INSERT INTO apply_history (kind,refId,workspaceId,baseBranch,preSha,postSha,appliedAt) VALUES (?,?,?,?,?,?,?)').run(record.kind,record.refId,record.workspaceId,record.baseBranch,record.undoSha!,redoSha,now.toISOString());
+  return{redoSha};
+}

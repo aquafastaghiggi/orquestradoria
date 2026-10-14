@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {existsSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {checkUndo,gitHead,latestApply,recordApply,undoApply} from './apply-undo.js';
+import {checkRedo,checkUndo,gitHead,latestApply,recordApply,redoApply,undoApply} from './apply-undo.js';
 
 const git=(cwd:string,...args:string[])=>execFileSync('git',['-c','user.name=t','-c','user.email=t@t',...args],{cwd,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 
@@ -67,5 +67,43 @@ test('undo is refused when later commits, local changes or another branch would 
     assert.match(checkUndo(record,dir).reason!,/novos commits/);
     assert.equal(readFileSync(join(dir,'depois.txt'),'utf8'),'trabalho posterior');
     assert.equal(checkUndo(undefined,dir).available,false);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('redo restores the applied work by reverting the revert, and the new apply can be undone again',()=>{
+  const {dir,preSha,postSha}=appliedRepo();
+  try{
+    const db=newDb();
+    recordApply(db,{kind:'mission',refId:'m',workspaceId:'w',baseBranch:'main',preSha,postSha});
+    assert.equal(checkRedo(latestApply(db,'mission','m'),dir).available,false); // ainda não foi desfeita
+    undoApply(db,latestApply(db,'mission','m')!,dir);
+    assert.equal(existsSync(join(dir,'novo.js')),false);
+    const undone=latestApply(db,'mission','m')!;
+    assert.equal(checkRedo(undone,dir).available,true);
+    const {redoSha}=redoApply(db,undone,dir);
+    assert.equal(readFileSync(join(dir,'index.html'),'utf8'),'<h1>depois</h1>');
+    assert.equal(existsSync(join(dir,'novo.js')),true);
+    assert.equal(git(dir,'status','--porcelain'),'');
+    const again=latestApply(db,'mission','m')!;
+    assert.equal(again.postSha,redoSha);assert.equal(again.preSha,undone.undoSha);assert.equal(again.undoneAt,null);
+    assert.equal(checkUndo(again,dir).available,true);
+    undoApply(db,again,dir); // ciclo completo: desfaz de novo
+    assert.equal(existsSync(join(dir,'novo.js')),false);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('redo is refused after later commits or on another branch',()=>{
+  const {dir,preSha,postSha}=appliedRepo();
+  try{
+    const db=newDb();
+    recordApply(db,{kind:'task',refId:'t',workspaceId:'w',baseBranch:'main',preSha,postSha});
+    undoApply(db,latestApply(db,'task','t')!,dir);
+    const undone=latestApply(db,'task','t')!;
+    git(dir,'checkout','-q','-b','outra');
+    assert.match(checkRedo(undone,dir).reason!,/branch "outra"/);
+    git(dir,'checkout','-q','main');
+    writeFileSync(join(dir,'extra.txt'),'x');git(dir,'add','.');git(dir,'commit','-q','-m','posterior');
+    assert.match(checkRedo(undone,dir).reason!,/novos commits/);
+    assert.throws(()=>redoApply(db,undone,dir),/novos commits/);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });

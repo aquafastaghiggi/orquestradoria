@@ -8,7 +8,7 @@ Atualizado em 2026-10-13. Tela: menu **Custos**. Código: `packages/shared/src/p
 
 - Tabela: `DEFAULT_PRICING` (conferida em **2026-10-13** nas páginas oficiais da Anthropic, OpenAI e Cursor — links na tela). Para ajustar sem mexer no código, aponte `PRICING_FILE` para um JSON com entradas por `id` (mescla sobre a padrão; entradas inválidas são ignoradas).
 - Cada execução grava `estimatedCost` (calculado), `reportedCost` (o que o provider informou), `costSource` (`computed | provider_reported | mixed | mock | unknown`), `actualModel` e `usageDetails` (tokens por modelo).
-- Modelo sem preço na tabela → usa o valor do provider e marca `mixed/provider_reported`; sem nenhum dado → `unknown` (a tela mostra N/D, nunca um falso zero).
+- Modelo sem preço na tabela → usa o valor do provider e marca `mixed/provider_reported`; sem nenhum dado → `unknown` (a tela mostra N/D, nunca um falso zero). Execuções que **falham** (ex.: saída final do Claude fora do formato) também registram o custo dos tokens que gastaram, lido do envelope do CLI.
 
 ### Por que não confiar no custo do CLI
 

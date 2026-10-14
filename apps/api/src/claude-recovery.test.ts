@@ -90,3 +90,13 @@ test('adapter: a valid JSON answer is untouched (no warning)',async()=>{
     assert.equal((result.structuredResult as any).summary,'ok');
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('adapter: a run that fails on invalid JSON still reports its token usage so the cost is not lost',async()=>{
+  const clean=repoWithChanges(false);
+  try{
+    const error:any=await run(clean,'Pronto!').then(()=>null,e=>e);
+    assert.equal(error.kind,'validation_error');
+    assert.ok(error.usage&&error.usage.tokenUsage>0,'usage attached to the error');
+    assert.equal(error.usage.models[0].model,'claude-haiku-5-5');
+  }finally{rmSync(clean,{recursive:true,force:true});}
+});

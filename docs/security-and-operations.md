@@ -40,7 +40,7 @@ Ao iniciar, tudo que o banco ainda marca como "em execução" é resto de uma AP
 
 ## Desfazer aplicação
 
-O Apply é um `git merge --no-ff` na branch base; ele passa a registrar o commit de antes e o de depois (`apply_history`). **Desfazer aplicação** (task e missão, na tela e em `POST /api/{tasks|missions}/:id/undo-apply`) cria um **commit de reversão** (`git revert -m 1`): nada é apagado do histórico e nada é enviado. Só é oferecido quando a branch ainda está no commit do Apply, sem alterações não commitadas e na branch base; senão a tela explica o motivo. Aplicações feitas antes deste recurso não têm registro e não podem ser desfeitas por aqui.
+O Apply é um `git merge --no-ff` na branch base; ele passa a registrar o commit de antes e o de depois (`apply_history`). **Desfazer aplicação** (task e missão, na tela e em `POST /api/{tasks|missions}/:id/undo-apply`) cria um **commit de reversão** (`git revert -m 1`): nada é apagado do histórico e nada é enviado. Só é oferecido quando a branch ainda está no commit do Apply, sem alterações não commitadas e na branch base; senão a tela explica o motivo. Aplicações feitas antes deste recurso não têm registro e não podem ser desfeitas por aqui. Depois de desfazer, **Refazer aplicação** (POST /api/{tasks|missions}/:id/redo-apply) reverte a reversão com um novo commit e a aplicação volta a poder ser desfeita (mesmas travas: branch base, HEAD no commit do desfazer, sem alterações pendentes). Aplicar, desfazer, refazer e descartar uma missão mantêm o status de ambiente das tasks filhas em sincronia (e a inicialização corrige as que ficaram para trás).
 
 ## Retenção de dados
 
