@@ -25,9 +25,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck
-      - run: pnpm --filter @orchestrator/api test
-      - run: pnpm --filter @orchestrator/web build
-      - name: Chromium para o teste de fumaça
+      - name: Chromium (testes de QA no navegador e teste de fumaça)
         run: pnpm --filter @orchestrator/adapters exec playwright install chromium
+      - name: Testes da API
+        shell: pwsh
+        run: |
+          pnpm --filter @orchestrator/api test *>&1 | Tee-Object -FilePath test.log
+          $code = $LASTEXITCODE
+          $text = Get-Content test.log -Raw
+          # Publica cada teste que falhou como anotação (legível na página da execução e pela API pública).
+          $matches = [regex]::Matches($text, '(?ms)^\s*not ok \d+ - (?<name>[^\r\n]+)\r?\n(?<body>.*?)(?=^\s*(?:ok|not ok) \d+ - |\z)')
+          foreach ($m in ($matches | Select-Object -First 12)) {
+            $err = [regex]::Match($m.Groups['body'].Value, '(?ms)(error|message): (?<e>.{0,600}?)(?=\r?\n\s+(?:code|name|stack|expected|actual|operator|at|\.\.\.)|\z)')
+            $detail = ($err.Groups['e'].Value -replace '\s+', ' ').Trim()
+            Write-Host "::error title=Teste falhou::$($m.Groups['name'].Value) :: $detail"
+          }
+          Get-Content test.log | Select-String -Pattern '^# (tests|pass|fail)' | ForEach-Object { Write-Host $_.Line }
+          exit $code
+      - run: pnpm --filter @orchestrator/web build
       - name: Teste de fumaça da interface (mock, custo zero)
         run: pnpm smoke
