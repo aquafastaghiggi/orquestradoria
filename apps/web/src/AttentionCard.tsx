@@ -1,6 +1,7 @@
 import React from 'react';
 import {canAdjustTask,prefillAdjust} from './TaskPreviewCard';
 import {explainFailure} from './MissionProgress';
+import {suggestAnswer} from '@orchestrator/shared';
 
 const TITLES:Record<string,string>={
   needs_input:'Preciso de você',
@@ -17,7 +18,7 @@ const NEXT:Record<string,string>={
 
 /** Rascunho com as perguntas do Developer prontas para você responder (vai para o campo "Solicitar ajuste"). */
 export const buildAnswerDraft=(questions:string[],kind?:string)=>questions.length
-  ?`Respostas às perguntas do Developer:\n${questions.map((question,index)=>`${index+1}. ${question}\nResposta: `).join('\n')}\n\nComplemente aqui o que mais precisa mudar:\n`
+  ?`Respostas às perguntas do Developer:\n${questions.map((question,index)=>`${index+1}. ${question}\nResposta: ${suggestAnswer(question)}`.trimEnd()+(suggestAnswer(question)?'':' ')).join('\n')}\n\nComplemente aqui o que mais precisa mudar:\n`
   :`Complemento para destravar a task${kind?` (${TITLES[kind]||kind})`:''}:\n(explique o que faltou ou o que deve ser feito diferente)\n`;
 
 /** Por que a task parou e o que fazer. Vem da parada inteligente do ciclo de correção ou da explicação do último erro. */

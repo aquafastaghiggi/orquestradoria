@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {PipelineRunner,assessDeveloper,assessReviewer,sameIssues,denialGuidanceText} from '@orchestrator/core';
+import {suggestAnswer} from '@orchestrator/shared';
 
 // Frases reais da task "login antigo..." (ciclos 4 e 5), que repetiram o mesmo problema.
 const cycle4=[{severity:'high',file:'database/criar_usuario.php',description:'O script somente disponibiliza uma ferramenta genérica e não cria o usuário solicitado `motorista` nem corrige o acesso de `demo`/`demo123`. A tarefa permanece sem uma conclusão.'},{severity:'medium',file:'README.md',description:'A documentação orienta o operador a executar manualmente o script, mas não informa quais credenciais foram criadas nem demonstra que o login solicitado funciona.'}];
@@ -65,4 +66,14 @@ test('pipeline: a different finding each round keeps going until approved',async
   const adapter=adapterOf([()=>work,()=>({status:'NEEDS_FIX',summary:'x',issues:cycle4}),()=>work,()=>({status:'NEEDS_FIX',summary:'y',issues:[{severity:'high',file:'login.php',description:'A senha é gravada em texto puro no banco.'}]}),()=>work,()=>({status:'APPROVED',summary:'ok'})]);
   const outputs=await new PipelineRunner(adapter,h).run(ctx,['developer','reviewer'],0,undefined,undefined,stageCtx,{enabled:true,maxCycles:5} as any);
   assert.equal(outputs.length,6);assert.equal(stages.length,6);
+});
+
+test('the answer is suggested for the questions the Developer really asked (real wording from the failed task)',()=>{
+  const q1='Confirma que eu crie as contas demo e motorista diretamente em controle_notas? A política do ambiente proíbe root e outros bancos, então não executei; se confirmar, eu rodo com a configuração padrão do projeto.';
+  const q2='Posso usar curl (ou equivalente) para comprovar o login.php via HTTP em 127.0.0.1? A chamada foi negada nesta sessão; se não for permitida, a verificação fica para você na máquina local.';
+  const a1=suggestAnswer(q1),a2=suggestAnswer(q2);
+  assert.match(a1,/Não crie nada no banco real/);assert.match(a1,/script idempotente/);assert.match(a1,/ORQ_DB_\*/);assert.match(a1,/motorista \/ motorista123/);
+  assert.match(a2,/curl contra http:\/\/127\.0\.0\.1/);assert.match(a2,/php -S/);assert.doesNotMatch(a2,/banco real/);
+  assert.match(suggestAnswer('Qual deve ser a senha do usuário motorista?'),/motorista123/);
+  assert.equal(suggestAnswer('Qual a cor do botão?'),'');assert.equal(suggestAnswer(''),'');
 });

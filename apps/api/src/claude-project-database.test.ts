@@ -66,3 +66,13 @@ test('Developer may use simple read-only commands but still not env/printenv (cr
   assert.equal(/Bash\(env:|Bash\(printenv:|Bash\(set:/.test(joined),false);
   assert.match(seen.prompt,/ONE simple command per Bash call/);assert.match(seen.prompt,/"questions"/);
 });
+
+test('curl is allowed only against this computer, and the real-database rule is in the Developer prompt',async()=>{
+  const seen=await run({ORQ_DB_NAME:'orq_abc123'});
+  const tools=seen.args.join(' ');
+  assert.ok(tools.includes('Bash(curl http://127.0.0.1:*)')&&tools.includes('Bash(curl -s http://127.0.0.1:*)')&&tools.includes('Bash(curl http://localhost:*)'));
+  assert.equal(/Bash\(curl:\*\)|Bash\(curl \*\)/.test(tools),false,'no unrestricted curl');
+  assert.equal(/Bash\(curl[^)]*https?:\/\/(?!127\.0\.0\.1|localhost)/.test(tools),false,'no external host');
+  assert.match(seen.prompt,/must not create them there/);assert.match(seen.prompt,/do NOT ask for permission/);
+  assert.match(seen.prompt,/curl is allowed only against http:\/\/127\.0\.0\.1/);
+});
