@@ -16,7 +16,7 @@ test('Developer asks a question: the task stops asking the user (no tester/revie
     execFileSync('git',['init','-b','main'],{cwd:workspace});
     writeFileSync(join(workspace,'README.md'),'x\n');execFileSync('git',['add','.'],{cwd:workspace});execFileSync('git',['-c','user.name=t','-c','user.email=t@t','commit','-qm','readme'],{cwd:workspace});
     const tsx=resolve(import.meta.dirname,'../node_modules/tsx/dist/cli.mjs'),server=resolve(import.meta.dirname,'server.ts');
-    child=spawn(process.execPath,[tsx,server],{cwd:import.meta.dirname,env:{...process.env,DB_PATH:join(root,'api.sqlite'),PORT:String(port),TASK_ISOLATION_MODE:'worktree',DEVELOPER_PROVIDER:'mock',REVIEWER_PROVIDER:'mock',TESTER_PROVIDER:'mock',TESTER_REQUIRED:'false',ORQ_PROJECT_DB_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
+    child=spawn(process.execPath,[tsx,server],{cwd:import.meta.dirname,env:{...process.env,DB_PATH:join(root,'api.sqlite'),PORT:String(port),TASK_ISOLATION_MODE:'worktree',TASK_WORKTREE_ROOT:join(root,'worktrees'),DEVELOPER_PROVIDER:'mock',REVIEWER_PROVIDER:'mock',TESTER_PROVIDER:'mock',TESTER_REQUIRED:'false',ORQ_PROJECT_DB_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
     const base=`http://127.0.0.1:${port}`;
     await waitFor(async()=>fetch(`${base}/health`).then(r=>r.ok).catch(()=>false),ok=>ok,'server health');
     const ws=await call(base,'/api/workspaces',{method:'POST',body:JSON.stringify({name:'ni',type:'local',location:workspace,branch:'main'})});assert.equal(ws.status,201);
