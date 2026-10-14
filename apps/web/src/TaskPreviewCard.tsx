@@ -7,6 +7,18 @@ type Mode={mode:'mock'|'real';forced:boolean;entries:{key:string;provider:string
 
 const PREVIEWABLE=['approved_waiting_action','manual_review_preserved','failed_preserved'];
 const ADJUSTABLE=['approved_waiting_action','manual_review_preserved'];
+/** Uma task pode receber ajuste quando o ambiente está preservado e ela não pertence a uma missão. */
+export const canAdjustTask=(task:{status:string;missionId?:string|null},envStatus:string)=>!task.missionId&&ADJUSTABLE.includes(envStatus)&&['approved','needs_fix'].includes(task.status);
+const PREFILL_EVENT='orq:prefill-adjust';
+/** Monta o rascunho de correção a partir do resultado do Reviewer (o usuário edita e complementa antes de enviar). */
+export function buildFixDraft(review:any):string{
+  const issues=Array.isArray(review?.issues)?review.issues:[];
+  const lines=issues.map((issue:any,index:number)=>`${index+1}. [${issue.severity||'?'}] ${issue.file&&issue.file!=='general'?issue.file+': ':''}${String(issue.description||'').trim()}`);
+  const body=lines.length?lines.join('\n'):`- ${String(review?.summary||'').trim()}`;
+  return `Corrija os problemas apontados pela revisão:\n${body}\n\nComplemente aqui o que mais precisa mudar:\n`.slice(0,4000);
+}
+/** Envia o rascunho para o campo "Solicitar ajuste" da tela e leva o usuário até ele. */
+export const prefillAdjust=(text:string)=>window.dispatchEvent(new CustomEvent(PREFILL_EVENT,{detail:{text}}));
 
 async function post(url:string,body?:unknown){
   const response=await fetch(url,{method:'POST',headers:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
@@ -19,6 +31,18 @@ export function PreviewAdjustCard({baseUrl,idKey,canPreview,canAdjust,workspaceI
   const[preview,setPreview]=useState<Preview>({status:'stopped'}),[busy,setBusy]=useState(false),[feedback,setFeedback]=useState(''),[mode,setMode]=useState<Mode|null>(null);
   useEffect(()=>{if(!canPreview){setPreview({status:'stopped'});return;}void fetch(`${baseUrl}/preview`).then(r=>r.json()).then(setPreview).catch(()=>setPreview({status:'stopped'}));},[baseUrl,canPreview]);
   useEffect(()=>{void fetch(`/api/mode${workspaceId?`?workspaceId=${workspaceId}`:''}`).then(r=>r.json()).then(setMode).catch(()=>setMode(null));},[workspaceId]);
+  useEffect(()=>{
+    if(!canAdjust)return;
+    const listener=(event:Event)=>{
+      setFeedback(String((event as CustomEvent).detail?.text||''));
+      window.setTimeout(()=>{
+        const field=document.getElementById(`adjust-${idKey}`) as HTMLTextAreaElement|null;
+        field?.scrollIntoView({behavior:'smooth',block:'center'});field?.focus();field?.setSelectionRange(field.value.length,field.value.length);
+      },50);
+    };
+    window.addEventListener(PREFILL_EVENT,listener);
+    return()=>window.removeEventListener(PREFILL_EVENT,listener);
+  },[canAdjust,idKey]);
   if(!canPreview&&!canAdjust)return null;
 
   const developerMock=mode?.forced?true:developerProviderInSnapshot?developerProviderInSnapshot==='mock':mode?.entries.find(entry=>entry.key==='developer')?.provider==='mock';
@@ -65,7 +89,7 @@ export function PreviewAdjustCard({baseUrl,idKey,canPreview,canAdjust,workspaceI
     {canAdjust&&<>
       {developerMock&&<div className="notice warning"><strong>Developer em modo simulado (mock)</strong><span>Ele não altera arquivos. O ajuste percorre o fluxo, mas o resultado não muda. Para alterações reais, configure o Developer como Claude Code.</span></div>}
       <label htmlFor={`adjust-${idKey}`} className="muted">Solicitar ajuste (volta ao Developer no mesmo worktree)</label>
-      <textarea id={`adjust-${idKey}`} rows={4} maxLength={4000} value={feedback} onChange={event=>setFeedback(event.target.value)} placeholder="Ex.: reduza o botão em 20% e altere o texto para Salvar" style={{width:'100%',boxSizing:'border-box'}}/>
+      <textarea id={`adjust-${idKey}`} rows={feedback.length>200?12:4} maxLength={4000} value={feedback} onChange={event=>setFeedback(event.target.value)} placeholder="Ex.: reduza o botão em 20% e altere o texto para Salvar" style={{width:'100%',boxSizing:'border-box'}}/>
       <button className="primary" disabled={busy||!feedback.trim()} onClick={requestChanges}>Solicitar ajuste</button>
       {!feedback.trim()&&<small className="muted">Descreva o ajuste acima para habilitar o botão.</small>}
     </>}
@@ -77,7 +101,7 @@ type TaskProps={task:{id:string;status:string;workspaceId?:string;missionId?:str
 export default function TaskPreviewCard({task,environment,onRefresh,notify}:TaskProps){
   const envStatus=environment?.environmentStatus||task.status;
   const canPreview=Boolean(environment?.worktreePath)&&PREVIEWABLE.includes(envStatus);
-  const canAdjust=!task.missionId&&ADJUSTABLE.includes(envStatus)&&['approved','needs_fix'].includes(task.status);
+  const canAdjust=canAdjustTask(task,envStatus);
   const developer=(task.configSnapshot?.agentConfigs||[]).find((config:any)=>config.role==='developer');
   return <PreviewAdjustCard baseUrl={`/api/tasks/${task.id}`} idKey={task.id} canPreview={canPreview} canAdjust={canAdjust} workspaceId={task.workspaceId} developerProviderInSnapshot={developer?.provider} noun="task" onRefresh={onRefresh} notify={notify}/>;
 }

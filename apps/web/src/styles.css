@@ -12,3 +12,5 @@
 .eta-bar{height:8px;border-radius:999px;background:#dfe7f5;overflow:hidden}
 .eta-bar>div{height:100%;background:#2f5fd0;border-radius:999px;transition:width .8s ease}
 .eta-bar.small{height:5px}
+.review-issues{margin:8px 0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.review-result button.primary{margin-top:8px}
