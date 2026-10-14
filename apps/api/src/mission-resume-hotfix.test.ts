@@ -17,7 +17,7 @@ test('mission resume reuses the failed child task and has one official route',()
 test('mission detail exposes bounded execution errors for a failed current stage',()=>{
   const server=readFileSync(new URL('./server.ts',import.meta.url),'utf8');
   const main=readFileSync(new URL('../../web/src/main.tsx',import.meta.url),'utf8');
-  assert.match(server,/progressMessage,status,error FROM executions/);
+  assert.match(server,/progressMessage,progressPercent,status,error,startedAt,finishedAt,lastHeartbeatAt FROM executions/);
   assert.match(server,/slice\(0,500\)/);
   assert.match(main,/failed','blocked','running','approved/);
   assert.match(main,/Falhou em:/);

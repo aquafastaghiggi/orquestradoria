@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {estimateMission,formatDuration} from '@orchestrator/shared';
 
 const STAGES:Array<{key:string;label:string}>=[{key:'developer',label:'Developer'},{key:'tester',label:'Tester'},{key:'reviewer',label:'Reviewer'}];
 const seconds=(from?:string|null,to:number=Date.now())=>{const t=from?Date.parse(from):NaN;return Number.isFinite(t)?Math.max(0,Math.round((to-t)/1000)):null;};
@@ -27,18 +28,41 @@ export function FailureExplanation({error,role}:{error?:string|null;role?:string
   </>;
 }
 
-/** Etapas do pipeline da task atual + tempo decorrido + há quanto tempo a IA deu sinal de vida. */
-export function StageProgress({current,stageNames,completed,total}:{current:any;stageNames:Record<string,string>;completed:number;total:number}){
-  const [tick,setTick]=useState(Date.now());
-  useEffect(()=>{const id=window.setInterval(()=>setTick(Date.now()),1000);return()=>window.clearInterval(id);},[]);
+function useTick(){const [tick,setTick]=useState(Date.now());useEffect(()=>{const id=window.setInterval(()=>setTick(Date.now()),1000);return()=>window.clearInterval(id);},[]);return tick;}
+function estimateFor(tasks:any[],current:any,tick:number){
+  const execution=current?.execution;
+  const running=execution?.status==='running';
+  const stageElapsedMs=running?(seconds(execution.startedAt,tick)||0)*1000:0;
+  const index=current?tasks.indexOf(current):-1;
+  return estimateMission({tasks:tasks.map((t:any)=>({status:t.status,durationMs:t.durationMs})),current:current&&index>=0&&current.status!=='completed'?{index,stage:String(current.childTask?.currentStage||execution?.role||'developer'),stageElapsedMs,progressPercent:running?execution?.progressPercent:null}:undefined});
+}
+
+/** Faixa no topo do modal: % da missão, etapa atual e estimativa de tempo (baseada nas etapas já concluídas). */
+export function MissionEta({tasks,current,status}:{tasks:any[];current:any;status:string}){
+  const tick=useTick();
+  if(!['approved','running','waiting_human'].includes(status)||!tasks.length)return null;
+  const e=estimateFor(tasks,current,tick);
+  const doneCount=tasks.filter(t=>t.status==='completed').length;
+  return <div className="mission-eta">
+    <div className="mission-eta-row"><strong>{e.percent}% da missão</strong><span>{doneCount} de {tasks.length} etapas concluídas</span></div>
+    <div className="eta-bar" role="progressbar" aria-valuenow={e.percent} aria-valuemin={0} aria-valuemax={100}><div style={{width:`${e.percent}%`}}/></div>
+    <small className="muted">Tempo estimado: ~{formatDuration(e.remainingMs)} restantes · total ~{formatDuration(e.totalMs)} · {e.basis==='measured'?`média de ${formatDuration(e.averageTaskMs)} por etapa nas já concluídas`:'estimativa inicial (~2,5 min por etapa) até a primeira etapa terminar'}</small>
+  </div>;
+}
+
+/** Etapas do pipeline da task atual + % da etapa + tempo decorrido + há quanto tempo a IA deu sinal de vida. */
+export function StageProgress({current,tasks,stageNames,completed,total}:{current:any;tasks:any[];stageNames:Record<string,string>;completed:number;total:number}){
+  const tick=useTick();
   const execution=current?.execution;
   const active=String(current?.childTask?.currentStage||execution?.role||'');
   const activeIndex=STAGES.findIndex(s=>s.key===active);
   const running=execution?.status==='running';
   const elapsed=running?seconds(execution.startedAt,tick):null;
   const silent=running?seconds(execution.lastHeartbeatAt,tick):null;
+  const e=estimateFor(tasks,current,tick);
   return <div className="stage-progress">
-    <div className="stage-progress-head"><strong>Etapa {Math.min(completed+1,total)} de {total}</strong>{elapsed!==null&&<span>nesta execução há {clock(elapsed)}</span>}</div>
+    <div className="stage-progress-head"><strong>Etapa {Math.min(completed+1,total)} de {total}{e.currentTaskPercent!==null?` · ${e.currentTaskPercent}%`:''}</strong>{elapsed!==null&&<span>nesta execução há {clock(elapsed)}</span>}</div>
+    {e.currentTaskPercent!==null&&<div className="eta-bar small" role="progressbar" aria-valuenow={e.currentTaskPercent} aria-valuemin={0} aria-valuemax={100}><div style={{width:`${e.currentTaskPercent}%`}}/></div>}
     <ol className="stage-steps">{STAGES.map((s,i)=><li key={s.key} className={i<activeIndex?'done':i===activeIndex?'active':''}>{i<activeIndex?'✓':i===activeIndex?'→':'○'} {stageNames[s.key]||s.label}</li>)}</ol>
     {running&&<small className="muted">{execution.progressMessage||'Executando…'}{silent!==null&&silent>=15?` · sem sinal da IA há ${clock(silent)} (normal em tarefas grandes, o limite total é por etapa)`:''}</small>}
   </div>;

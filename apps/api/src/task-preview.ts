@@ -1,5 +1,5 @@
 import {existsSync} from 'node:fs';
-import {RuntimeSessionManager,type RuntimeSession} from '@orchestrator/workspace';
+import {RuntimeDetector,RuntimeSessionManager,type RuntimeSession} from '@orchestrator/workspace';
 
 export interface TaskPreviewView{status:'stopped'|'ready'|'failed';runtime?:string;url?:string;error?:string;startedAt?:string;}
 
@@ -10,13 +10,13 @@ export const MAX_ADJUSTMENT_CHARS=4000;
 export function previewView(session?:RuntimeSession):TaskPreviewView{
   if(!session||session.status==='stopped')return{status:'stopped'};
   if(session.status==='failed')return{status:'failed',runtime:session.profile.type,error:session.stderr||'Runtime indisponível'};
-  return{status:'ready',runtime:session.profile.type,url:session.baseUrl,startedAt:session.startedAt};
+  return{status:'ready',runtime:session.profile.type,url:session.baseUrl+(session.profile.entryPath&&session.profile.entryPath!=='/'?session.profile.entryPath:''),startedAt:session.startedAt};
 }
 
 /** Mantém um runtime local por task, sempre apontando para o worktree isolado (nunca para a branch principal). */
 export class TaskPreviewManager{
   private readonly sessions=new Map<string,RuntimeSession>();
-  constructor(private readonly runtime=new RuntimeSessionManager()){}
+  constructor(private readonly runtime=new RuntimeSessionManager(new RuntimeDetector({phpFallback:true}))){}
   get(taskId:string){
     const session=this.sessions.get(taskId);
     if(session&&session.status!=='ready'&&session.status!=='starting')this.sessions.delete(taskId);

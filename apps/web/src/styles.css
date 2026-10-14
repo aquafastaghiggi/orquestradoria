@@ -7,3 +7,8 @@
 .stage-steps li{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid #d6dde8;color:#6b7a90;background:#fff}
 .stage-steps li.done{color:#1f7a4d;border-color:#9fd3b8;background:#f0faf4}
 .stage-steps li.active{color:#1d4ed8;border-color:#93b4f5;background:#eef4ff;font-weight:600}
+.mission-eta{margin:8px 0 14px;padding:10px 12px;border:1px solid #cfdcf5;border-radius:8px;background:#f5f9ff;display:flex;flex-direction:column;gap:6px}
+.mission-eta-row{display:flex;justify-content:space-between;gap:12px;font-size:13px}
+.eta-bar{height:8px;border-radius:999px;background:#dfe7f5;overflow:hidden}
+.eta-bar>div{height:100%;background:#2f5fd0;border-radius:999px;transition:width .8s ease}
+.eta-bar.small{height:5px}
