@@ -21,6 +21,8 @@ export interface StageContextOptions {
   maxChars?:number;
   projectContext?:ProjectContextSnapshotInput|Record<string,unknown>|null;
   projectContextMaxChars?:number;
+  /** Memória do projeto (texto do usuário + aprendido). Não vai para o Tester. */
+  projectKnowledge?:string;
 }
 
 const DEFAULT_LIMITS:Record<AgentRole,number>={analyst:8000,planner:10000,developer:16000,tester:12000,reviewer:30000};
@@ -59,6 +61,7 @@ export function buildStageContext(options:StageContextOptions):StageContext{
   add('ACCEPTANCE CRITERIA',list(options.acceptanceCriteria)||'Implement and verify the requested outcome.');
   add('CONSTRAINTS',list(options.projectRules||[]));
   if(projectContext)add('PROJECT CONTEXT',projectContext.text);
+  if(options.projectKnowledge?.trim()&&options.role!=='tester')add('PROJECT KNOWLEDGE (written by the user and learned from earlier tasks; treat it as facts about this project)',options.projectKnowledge.trim().slice(0,4000));
   if(options.projectSummary)add('PROJECT SUMMARY',[options.projectSummary.language&&`Language: ${options.projectSummary.language}`,options.projectSummary.framework&&`Framework: ${options.projectSummary.framework}`,options.projectSummary.packageManager&&`Package manager: ${options.projectSummary.packageManager}`,options.projectSummary.relevantPaths?.length&&`Relevant paths: ${options.projectSummary.relevantPaths.join(', ')}`,options.projectSummary.testCommands?.length&&`Test commands: ${options.projectSummary.testCommands.join(', ')}`].filter(Boolean).join('\n'));
   if(options.role==='planner'){
     add('PLANNING SCOPE',`Workspace: ${options.workspaceContext.location}`);

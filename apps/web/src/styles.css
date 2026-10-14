@@ -26,3 +26,5 @@
 
 .stack-base{display:flex;flex-direction:column;gap:4px;margin:6px 0}
 .stack-base small{font-size:11px;opacity:.85}
+
+.knowledge-card textarea{font-size:12px;margin:6px 0}
