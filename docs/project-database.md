@@ -57,3 +57,17 @@ auditoria (`project_database.preflight` ou `project_database.unavailable`, só c
   do banco como `skipped` ("test database unavailable"). Nada é repetido e nenhum banco real é tocado.
 - **Tester:** as notas distinguem `Verificação reexecutada com sucesso`, `A verificação reexecutada falhou` e
   `Verificação não reexecutada (motivo)`. Verificações que precisam de servidor HTTP em execução continuam não reexecutadas pelo Tester.
+
+### Política × prompt (o que realmente barra um comando)
+
+- **Barrado pela política** (lista de permitidos do Claude Code): `printenv ...` e `env`/`set`, que não têm regra `Bash(...)`.
+- **Permitido pela política, só desencorajado pelo prompt:** `echo $ORQ_DB_NAME`, porque `Bash(echo:*)` está liberado. O prompt manda
+  não usar, mas isso é orientação, não barreira. Se o Claude Code recusar a expansão de `$VAR` por conta própria, isso vem do próprio
+  Claude Code e não foi verificado aqui (nenhum Claude real foi executado).
+
+### Teste local contra o MySQL real
+
+`apps/api/src/developer-db-preflight-live.test.ts` usa o MySQL do XAMPP e somente um banco descartável `orq_pf<hex>` (apagado ao final):
+preflight com sucesso, script PHP lendo `ORQ_DB_*` e conectando sem imprimir credenciais, e falhas (senha e porta erradas) com uma
+única tentativa, auditoria e evento. É pulado automaticamente se o login de teste, o MySQL ou o PHP não estiverem disponíveis.
+O fluxo completo da API (`runTask` -> `prepareDeveloperDatabase`) usa o mesmo helper, mas não foi exercitado com Claude real.

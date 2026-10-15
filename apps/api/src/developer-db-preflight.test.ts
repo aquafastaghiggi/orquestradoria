@@ -47,16 +47,23 @@ test('unavailable database: clear diagnosis, no retries, checks listed as skippe
   assert.equal(prompt.includes('TEST DATABASE\nA throwaway'),false,'the usable-database instructions are not sent');assert.equal(prompt.includes(cfg.password),false);
 });
 
-// Regressão: os comandos que a política recusava e deixavam o Developer travado procurando ORQ_DB_*.
-const REFUSED=['printenv','env','echo "$ORQ_DB_NAME"; cat database/schema.sql | head -5'];
-test('regression: the commands that were refused stay refused by the policy and are never re-run by the Tester',async()=>{
-  await developerPrompt({},{});
+// Regressão: os comandos que o Developer tentou para descobrir ORQ_DB_*.
+const REFUSED=['printenv ORQ_DB_NAME','printenv ORQ_DB_HOST','echo $ORQ_DB_NAME'];
+/** Casa uma regra "Bash(prefixo:*)" da lista de permissões pelo prefixo do comando (mesma semântica do Claude Code). */
+const allowedByPolicy=(allowed:string[],command:string)=>allowed.some(rule=>{const m=/^Bash\((.+):\*\)$/.exec(rule);return!!m&&(command===m[1]||command.startsWith(m[1]+' '));});
+
+test('regression: printenv is refused by the policy; echo is allowed by it and only discouraged by the prompt',async()=>{
+  const prompt=await developerPrompt({databasePreflight:{ok:true}},{ORQ_DB_NAME:'orq_abc'});
   const allowed=seenArgs[seenArgs.indexOf('--allowedTools')+1].split(',');
-  for(const command of REFUSED){
-    const first=command.split(/\s+/)[0];
-    assert.equal(allowed.includes(`Bash(${first}:*)`)&&['printenv','env'].includes(first),false,`${first} must not be allowed`);
-  }
-  assert.equal(allowed.some((rule:string)=>/^Bash\((?:printenv|env|set)/.test(rule)),false);
+  // POLÍTICA (obrigatória): printenv não está na lista de permitidos, então é recusado.
+  assert.equal(allowedByPolicy(allowed,'printenv ORQ_DB_NAME'),false);
+  assert.equal(allowedByPolicy(allowed,'printenv ORQ_DB_HOST'),false);
+  // POLÍTICA: echo está permitido (comando de leitura comum); a política sozinha NÃO impede "echo $ORQ_DB_NAME".
+  assert.equal(allowedByPolicy(allowed,'echo $ORQ_DB_NAME'),true);
+  // PROMPT (apenas orientação, não é barreira): ele desencoraja os três.
+  assert.match(prompt,/never run printenv, env, set or echo/);
+  assert.match(prompt,/do not look for credentials/);
+  // O Tester nunca reexecuta nenhum deles.
   assert.equal(planVerification(REFUSED.map(command=>({command,status:'passed'})),{location:tmpdir(),env:{}}).commands.length,0);
 });
 

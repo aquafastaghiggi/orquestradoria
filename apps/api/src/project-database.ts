@@ -99,6 +99,20 @@ export async function preflightTaskDatabase(config:ProjectDbConfig,name:string,r
   return prepared.ok?{ok:true,message:'Banco de teste disponível.'}:{ok:false,message:friendlyMysqlError(prepared.error)};
 }
 
+export interface DeveloperDatabase{env?:Record<string,string>;preflight?:{ok:boolean;message?:string}}
+/**
+ * Prepara o banco de teste do Developer: verificação prévia (uma tentativa) + auditoria/evento. `register` guarda o nome no
+ * registro da instância (só bancos registrados podem ser limpos). Sem configuração, nada muda (sem preflight).
+ */
+export async function prepareDeveloperDatabase(config:ProjectDbConfig|null,key:string,hooks:{register:(name:string,key:string)=>void;audit:(action:string,metadata:Record<string,unknown>)=>void;emit:(type:string,data:Record<string,unknown>)=>void},run:MysqlRunner=runMysql):Promise<DeveloperDatabase>{
+  if(!config)return{};
+  const name=databaseNameFor(key);
+  const prepared=await preflightTaskDatabase(config,name,run);
+  if(prepared.ok){hooks.register(name,key);hooks.audit('project_database.preflight',{status:'ok'});return{env:taskDatabaseEnv(config,name),preflight:{ok:true}};}
+  hooks.audit('project_database.unavailable',{error:prepared.message});hooks.emit('project_database.unavailable',{message:prepared.message});
+  return{preflight:{ok:false,message:prepared.message}};
+}
+
 export function friendlyMysqlError(error?:string):string{
   const text=String(error||'');
   if(/ENOENT/i.test(text))return 'Não encontrei o programa mysql. Confira o caminho em "Programa mysql".';
