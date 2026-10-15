@@ -45,3 +45,15 @@ de fumaça apagou o banco de uma task.
 O servidor PHP do preview loga erros no `stderr` (`PHP Fatal error`, `Warning`, respostas 4xx/5xx). O cartão **Preview e ajustes**
 lista as últimas ocorrências (atualiza a cada 4 s) e oferece **"Criar correção a partir destes erros"**: preenche o campo de
 ajuste, que você complementa e envia ao Developer. O preview recebe as variáveis `ORQ_DB_*` do mesmo banco de teste da task.
+
+## Verificação prévia ao Developer
+
+Antes de iniciar o Developer, a API faz **uma única** verificação (`SELECT 1` + criar o banco `orq_*` da task). O resultado vai para a
+auditoria (`project_database.preflight` ou `project_database.unavailable`, só com sucesso/erro amigável, nunca credenciais).
+
+- **Disponível:** o prompt informa que a conexão já foi verificada e manda ler `ORQ_DB_*` direto no PHP (`getenv`) ou Node
+  (`process.env`), sem `printenv`, `env`, `set` ou `echo` das variáveis (continuam recusados pela política).
+- **Indisponível:** o prompt traz o diagnóstico, proíbe procurar credenciais e insistir, e manda registrar as verificações que dependem
+  do banco como `skipped` ("test database unavailable"). Nada é repetido e nenhum banco real é tocado.
+- **Tester:** as notas distinguem `Verificação reexecutada com sucesso`, `A verificação reexecutada falhou` e
+  `Verificação não reexecutada (motivo)`. Verificações que precisam de servidor HTTP em execução continuam não reexecutadas pelo Tester.

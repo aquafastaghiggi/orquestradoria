@@ -88,6 +88,17 @@ export async function testProjectDb(config:ProjectDbConfig,run:MysqlRunner=runMy
   return result.ok?{ok:true,message:'Conexão com o MySQL funcionando.'}:{ok:false,message:friendlyMysqlError(result.error)};
 }
 
+/**
+ * Verificação prévia ao Developer: uma única tentativa (SELECT 1 + criar o banco da task). Devolve só sucesso ou um erro
+ * amigável; nunca credenciais (o runner já mascara a senha e a mensagem amigável não a inclui).
+ */
+export async function preflightTaskDatabase(config:ProjectDbConfig,name:string,run:MysqlRunner=runMysql):Promise<{ok:boolean;message:string}>{
+  const connection=await testProjectDb(config,run);
+  if(!connection.ok)return{ok:false,message:connection.message};
+  const prepared=await ensureTaskDatabase(config,name,run);
+  return prepared.ok?{ok:true,message:'Banco de teste disponível.'}:{ok:false,message:friendlyMysqlError(prepared.error)};
+}
+
 export function friendlyMysqlError(error?:string):string{
   const text=String(error||'');
   if(/ENOENT/i.test(text))return 'Não encontrei o programa mysql. Confira o caminho em "Programa mysql".';
