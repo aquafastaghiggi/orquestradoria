@@ -69,3 +69,21 @@ API: `GET /api/self-repair/problems[?taskId=]` · `POST /api/self-repair/problem
 Limitações: as regras cobrem as falhas que o Orquestradoria registra (providers, watchdog, preflight de banco, política de comandos,
 fluxos, ciclo de correção); um defeito que não deixa rastro nesses registros não é detectado. O agrupamento é por assinatura do
 texto do erro: mensagens muito diferentes para a mesma causa viram problemas separados.
+
+## Infraestrutura da validação (worktree isolado)
+
+- **A validação é do repositório do Orquestradoria.** O diagnóstico anexado (logs de uma task de PHP, por exemplo) entra no pedido como
+  evidência **citada** (`> linha`): não vira critério de aceite nem requisito. A análise e a validação funcional de fluxos
+  (login/upload/listagem) **nunca rodam** no workspace da autocorreção (`flowValidationApplies`); o que valida é build, typecheck e testes.
+- **Dependências antes do Tester.** No worktree da task, o Orquestradoria roda `pnpm install --frozen-lockfile --prefer-offline` (somente
+  com cwd no worktree; recusa o diretório da instância). Só o `node_modules` do worktree é criado; o store do pnpm é compartilhado.
+  Um marcador com o hash do `pnpm-lock.yaml` evita reinstalar. O resultado vira o evento `self_repair.deps` e aparece em
+  "Testes e revisão". O Tester e a instalação usam `npm_config_pm_on_fail=ignore` e `COREPACK_ENABLE_STRICT=0`, porque o pnpm instalado
+  pode divergir do `packageManager` fixado (erro real `ERR_PNPM_BAD_PM_VERSION`).
+- **Erro de typecheck/build/teste completo.** Cada comando do Tester guarda a **linha de comando completa**, o diretório, o código de
+  saída e stdout/stderr **sem cores** (a saída longa mantém começo e FIM, onde está o erro). A tela mostra tudo isso, e o ciclo de
+  correção recebe o mesmo detalhe.
+- **Correção no Windows:** comandos `.cmd` (`pnpm`, `npm`) chegavam ao `cmd.exe` com as aspas reescapadas (`""run""`), então o Tester
+  não conseguia executar `pnpm run typecheck`. Agora os argumentos seguem verbatim.
+- **Nada é descartado sozinho.** Falhas preservam o worktree e o trabalho do Developer; só "Descartar" remove. Uma task preservada
+  pode ser retomada depois que a infraestrutura for corrigida.

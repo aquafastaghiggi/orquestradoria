@@ -244,3 +244,60 @@ test('problemas detectados: falha simulada → detecção sem créditos → diag
     for(const dir of [tmp,orq,other])try{rmSync(dir,{recursive:true,force:true});}catch{/* melhor esforço */}
   }
 });
+
+// =====================================================================================================
+// Infraestrutura: Tester roda o typecheck do repositório no worktree e mostra o erro; o worktree é preservado
+// =====================================================================================================
+function fakeOrqWithTypecheck(){
+  const root=fakeOrquestradoria();
+  mkdirSync(join(root,'scripts'),{recursive:true});
+  writeFileSync(join(root,'package.json'),JSON.stringify({name:'fake-orquestradoria',version:'0.0.0',private:true,scripts:{test:'node --test',typecheck:'node scripts/typecheck.js'}}));
+  writeFileSync(join(root,'scripts','typecheck.js'),[
+    "const {readFileSync}=require('node:fs');",
+    "process.stdout.write('verificando '+'.'.repeat(30000)+'\\nFIM-DA-SAIDA-PADRAO\\n');",
+    "if(readFileSync('src/sum.js','utf8').includes('a - b')){process.stderr.write('\\u001b[31merror TS2362\\u001b[0m: src/sum.js(1,29): o operador - foi usado onde + era esperado\\nFound 1 error in src/sum.js:1\\n');process.exit(2);}",
+    "console.log('typecheck ok');"].join('\n'));
+  git(root,'add','.');git(root,'commit','-q','-m','typecheck script');
+  return root;
+}
+
+test('autocorreção: o Tester roda o typecheck real no worktree, mostra comando/stdout/stderr, e o trabalho do Developer é preservado',{timeout:240000},async()=>{
+  const tmp=mkdtempSync(join(tmpdir(),'orq-selfrepair-tc-'));
+  const orq=fakeOrqWithTypecheck();const before=snapshotOf(orq);
+  // O Developer de teste só altera um comentário (não corrige o bug): o typecheck real precisa falhar.
+  const server=await startServer(tmp,{...MOCK_ENV,TESTER_PROVIDER:'command-tester',ORQ_SELF_REPO:orq,ORQ_TEST_FIXTURE_EDITS:JSON.stringify([{file:'src/sum.js',find:'// BUG simulado: deveria somar',replace:'// revisado, ainda sem corrigir'}])});
+  try{
+    const created=await api(server,'POST','/api/self-repair/repairs',{prompt:'Corrigir o bug de soma. Contexto antigo: login e upload em PHP com listagem na conferência.\nCritérios de aceite:\n- O motorista entra com login'});
+    assert.equal(created.status,202,JSON.stringify(created.body));const id=created.body.taskId;
+    const settled=await until(async()=>(await api(server,'GET',`/api/self-repair/repairs/${id}`)).body,d=>Boolean(d?.task)&&!d.task.running&&['approved','failed','needs_input','needs_manual_review','stalled'].includes(d.task.status),'pipeline terminar',150000);
+    assert.notEqual(settled.task.status,'approved','o typecheck real reprovou, então não pode aprovar');
+
+    // erro detalhado do typecheck: comando completo, código, stdout e stderr (sem cores, com o fim da saída)
+    const typecheck=settled.tests.commands.find((c:any)=>c.label==='typecheck');
+    assert.ok(typecheck,JSON.stringify(settled.tests));
+    assert.equal(typecheck.status,'failed');assert.equal(typecheck.command,'npm run typecheck');assert.ok(typecheck.exitCode===1||typecheck.exitCode===2);
+    assert.equal(resolve(typecheck.cwd),resolve(settled.task.worktreePath),'o typecheck rodou no worktree, não na instância');
+    assert.match(typecheck.stderr,/error TS2362: src\/sum\.js\(1,29\): o operador - foi usado onde \+ era esperado/);assert.match(typecheck.stderr,/Found 1 error in src\/sum\.js:1/);
+    assert.equal(typecheck.stderr.includes('\u001b'),false);assert.match(typecheck.stdout,/FIM-DA-SAIDA-PADRAO\s*$/);
+
+    // preparação de dependências registrada (sem pnpm-lock no repositório de teste, nada a instalar) antes do Tester
+    assert.ok(settled.dependencies,'evento de dependências registrado');assert.equal(settled.dependencies.status,'skipped');assert.match(settled.dependencies.reason,/pnpm-lock\.yaml/);
+
+    // o logs/requisitos antigos do pedido não viraram validação de fluxo PHP: a única reprovação é o typecheck
+    assert.equal(settled.tests.functionalFlows,undefined);assert.equal(settled.tests.notes.some((n:string)=>/Fluxo obrigatório/.test(n)),false);
+
+    // o worktree e o trabalho do Developer foram preservados (nada descartado automaticamente)
+    const worktree=resolve(settled.task.worktreePath);
+    assert.equal(existsSync(worktree),true);assert.match(readFileSync(join(worktree,'src','sum.js'),'utf8'),/revisado, ainda sem corrigir/);
+    assert.match(String(settled.task.environmentStatus),/preserved|active/);assert.notEqual(settled.task.environmentStatus,'discarded');assert.equal(settled.repair.decision,null);
+    assert.equal(settled.actions.canDiscard,true,'descartar continua sendo escolha do usuário');
+
+    // a instância em execução e o servidor intactos
+    const after=snapshotOf(orq);
+    assert.equal(after.sum,before.sum);assert.equal(after.head,before.head);assert.equal(after.status,'');assert.equal(after.branch,'main');
+    assert.equal(alive(server.pid),true);assert.equal((await fetch(`${server.base}/health`)).ok,true);
+  }finally{
+    await server.stop();
+    for(const dir of [tmp,orq])try{rmSync(dir,{recursive:true,force:true});}catch{/* melhor esforço */}
+  }
+});

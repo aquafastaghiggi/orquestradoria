@@ -28,3 +28,4 @@
 .selfrepair-check{display:flex!important;grid-auto-flow:column;align-items:center;gap:8px!important}
 .selfrepair-history-list{list-style:none;padding:0;margin:0;display:grid;gap:6px;font-size:13px}
 @media(max-width:1023px){.selfrepair-grid{grid-template-columns:1fr}.selfrepair-stages{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.selfrepair-commands{padding-left:18px;display:grid;gap:8px;font-size:13px}.command-failure{margin-top:6px;border:1px solid #fecaca;background:#fff7f7;border-radius:8px;padding:8px 10px;display:grid;gap:4px;font-size:12px}.command-failure pre{max-height:240px;overflow:auto;margin:0}

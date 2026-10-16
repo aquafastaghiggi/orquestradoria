@@ -14,7 +14,8 @@ type Detail={
   repair:{taskId:string;prompt:string;mode:string;decision:string|null;decidedAt:string|null;spendConfirmedAt:string|null;createdAt:string};
   task:{id:string;title:string;status:string;currentStage:string|null;environmentStatus:string|null;taskBranch:string|null;worktreePath:string|null;baseBranch:string|null;running:boolean};
   stages:Array<{role:string;status:string;provider:string;model:string;error?:string;summary?:string}>;
-  tests:{status:string;summary?:string;commands:Array<{label:string;status:string;exitCode:number|null}>;notes:string[]}|null;
+  tests:{status:string;summary?:string;commands:Array<{label:string;command?:string;cwd?:string;status:string;exitCode:number|null;stdout?:string;stderr?:string}>;notes:string[]}|null;
+  dependencies:{at:string;status:string;reason?:string;command:string;cwd:string;exitCode?:number|null;durationMs?:number;stdout:string;stderr:string}|null;
   review:{status:string;summary?:string;issues:Array<{severity?:string;file?:string|null;description?:string}>}|null;
   files:{files:string[];added:string[];modified:string[];deleted:string[];truncated:boolean};
   adjustments:Array<{at:string;round?:number}>;history:Array<{at:string;action:string}>;
@@ -241,9 +242,16 @@ export default function SelfRepairPage({notify,focusTaskId}:{notify:Notify;focus
             <pre className="diff-viewer" aria-label="Diff">{diff||'Sem diff.'}</pre>
           </div>}
           {tab==='tests'&&<div>
+            {detail.dependencies&&<div className={`notice ${detail.dependencies.status==='failed'?'warning':'info'}`}><div><b>Dependências do worktree:</b> {detail.dependencies.status==='prepared'?'preparadas':detail.dependencies.status==='skipped'?'não foi preciso instalar':'FALHARAM'}{detail.dependencies.reason?` — ${detail.dependencies.reason}`:''}
+              <div><code>{detail.dependencies.command}</code> em <code>{detail.dependencies.cwd}</code>{detail.dependencies.exitCode!==null&&detail.dependencies.exitCode!==undefined?` (código ${detail.dependencies.exitCode})`:''}</div>
+              {detail.dependencies.status==='failed'&&<><pre className="mono">{detail.dependencies.stdout||'(stdout vazio)'}</pre><pre className="mono">{detail.dependencies.stderr||'(stderr vazio)'}</pre></>}</div></div>}
             <h4>Testes</h4>
             {detail.tests?<><p><span className={`status-badge ${detail.tests.status==='PASSED'?'approved':'failed'}`}>{detail.tests.status}</span> {detail.tests.summary}</p>
-              <ul>{detail.tests.commands.map((c,i)=><li key={i}>{c.label}: <b>{c.status}</b>{c.exitCode!==null&&c.exitCode!==undefined?` (código ${c.exitCode})`:''}</li>)}</ul>
+              <ul className="selfrepair-commands">{detail.tests.commands.map((c,i)=><li key={i}>{c.label}: <b>{c.status}</b>{c.exitCode!==null&&c.exitCode!==undefined?` (código ${c.exitCode})`:''}
+                {c.status!=='passed'&&<div className="command-failure">
+                  <div><b>Comando:</b> <code>{c.command||c.label}</code></div>{c.cwd&&<div><b>Diretório:</b> <code>{c.cwd}</code></div>}
+                  <div><b>stdout</b></div><pre className="mono" aria-label={`stdout de ${c.label}`}>{c.stdout||'(vazio)'}</pre>
+                  <div><b>stderr</b></div><pre className="mono" aria-label={`stderr de ${c.label}`}>{c.stderr||'(vazio)'}</pre></div>}</li>)}</ul>
               {detail.tests.notes.length>0&&<pre className="mono">{detail.tests.notes.join('\n')}</pre>}</>:<p className="muted">O Tester ainda não rodou.</p>}
             <h4>Revisão</h4>
             {detail.review?<><p><span className={`status-badge ${detail.review.status==='APPROVED'?'approved':'failed'}`}>{detail.review.status}</span> {detail.review.summary}</p>
