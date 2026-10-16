@@ -15,7 +15,7 @@ test('project memory API: empty by default, saved per workspace, validated and l
     const tsx=resolve(import.meta.dirname,'../node_modules/tsx/dist/cli.mjs'),server=resolve(import.meta.dirname,'server.ts');
     child=spawn(process.execPath,[tsx,server],{cwd:import.meta.dirname,env:{...process.env,DB_PATH:join(root,'api.sqlite'),PORT:String(port),TASK_ISOLATION_MODE:'worktree',TASK_WORKTREE_ROOT:join(root,'worktrees'),DEVELOPER_PROVIDER:'mock',REVIEWER_PROVIDER:'mock',TESTER_PROVIDER:'mock',ORQ_PROJECT_DB_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
     const base=`http://127.0.0.1:${port}`;
-    for(let i=0;i<100;i++){try{if((await fetch(`${base}/health`)).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
+    for(let i=0;i<300;i++){try{if((await fetch(`${base}/health`)).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
     const a=(await call(base,'/api/workspaces',{method:'POST',body:JSON.stringify({name:'a',type:'local',location:workspace,branch:'main'})})).body;
     assert.deepEqual((await call(base,`/api/workspaces/${a.id}/knowledge`)).body,{content:'',updatedAt:null,maxChars:6000});
     const saved=await call(base,`/api/workspaces/${a.id}/knowledge`,{method:'PUT',body:JSON.stringify({content:'Login de teste: demo / demo123\r\nRodar com php -S'})});

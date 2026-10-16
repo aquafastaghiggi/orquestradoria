@@ -1,0 +1,29 @@
+.selfrepair-page{display:grid;gap:18px}
+.selfrepair-page code{font:11px ui-monospace,monospace;background:#eef2f7;border-radius:4px;padding:1px 5px}
+.selfrepair-safety{display:grid;gap:8px}
+.selfrepair-safety small{color:#64748b;font-size:12px}
+.selfrepair-new{display:grid;gap:14px}
+.selfrepair-new label,.selfrepair-decision label{display:grid;gap:6px;color:#42546c;font-size:12px;font-weight:700}
+.selfrepair-new textarea,.selfrepair-new select,.selfrepair-new input,.selfrepair-decision textarea{border:1px solid #d6dee9;border-radius:8px;padding:10px;color:#1e293b;background:#fff;font-size:14px;font-weight:400;resize:vertical}
+.selfrepair-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.selfrepair-actions small{color:#64748b;font-size:12px}
+.selfrepair-grid{display:grid;grid-template-columns:minmax(260px,3fr) minmax(0,7fr);gap:18px;align-items:start}
+.selfrepair-history{display:grid;gap:8px;align-content:start}
+.selfrepair-history .task-row.selected{border-color:#2563eb;background:#f5f9ff}
+.selfrepair-stages{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0 12px}
+.selfrepair-stages .stage{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff;display:grid;gap:4px}
+.selfrepair-stages .stage small{color:#64748b;font-size:11px}
+.selfrepair-stages .stage.completed,.selfrepair-stages .stage.PASSED{border-color:#bbf7d0;background:#f0fdf4}
+.selfrepair-stages .stage.failed,.selfrepair-stages .stage.stalled{border-color:#fecaca;background:#fff1f2}
+.selfrepair-stages .stage.running{border-color:#bfdbfe;background:#eff6ff}
+.selfrepair-safe-row{display:grid;gap:4px;margin-bottom:8px}
+.selfrepair-safe-row small{color:#64748b;font-size:11px}
+.selfrepair-files{margin:0 0 10px;padding-left:18px;font-size:12px}
+.selfrepair-decision{border-top:1px solid var(--line);margin-top:16px;padding-top:12px;display:grid;gap:8px}
+.selfrepair-confirm{display:grid;gap:12px}
+.selfrepair-facts{display:grid;gap:6px}
+.selfrepair-facts div{display:flex;justify-content:space-between;gap:12px;font-size:13px;border-bottom:1px solid #edf1f6;padding:6px 0}
+.selfrepair-facts span{color:#64748b}
+.selfrepair-check{display:flex!important;grid-auto-flow:column;align-items:center;gap:8px!important}
+.selfrepair-history-list{list-style:none;padding:0;margin:0;display:grid;gap:6px;font-size:13px}
+@media(max-width:1023px){.selfrepair-grid{grid-template-columns:1fr}.selfrepair-stages{grid-template-columns:repeat(2,minmax(0,1fr))}}

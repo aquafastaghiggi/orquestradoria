@@ -36,3 +36,6 @@ export {analyzeProjectFlows,renderFlowPlan,requiredFlows} from './flow-intellige
 export type {FlowPlan,FlowPlanFlow,FlowCriterion,FlowPage,Certainty} from './flow-intelligence.js';
 export {runFunctionalFlows,validateFlowTests,flowIssues,phpProcessEnv,checkDatabaseIsolation,collectProofs} from './functional-flow.js';
 export type {FlowTest,FlowTestStep,FunctionalFlowReport,FlowRunResult,FlowStepResult} from './functional-flow.js';
+
+export {FixtureDeveloperAdapter} from './fixture-developer.js';
+export type {FixtureEdit} from './fixture-developer.js';
