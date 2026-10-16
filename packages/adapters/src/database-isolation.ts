@@ -293,7 +293,7 @@ export function checkDatabaseIsolation(location:string,test:FlowTestLike,env:Rec
 
   // 4) o ambiente do teste precisa mesmo fornecer o banco isolado
   const envOk=Boolean(env.ORQ_DB_NAME&&DB_NAME.test(env.ORQ_DB_NAME)&&env.ORQ_DB_USER&&env.ORQ_DB_USER.toLowerCase()!=='root'&&env.ORQ_DB_HOST&&LOCAL_HOSTS.has(env.ORQ_DB_HOST.toLowerCase())&&env.ORQ_DB_PORT&&env.ORQ_DB_PASSWORD!==undefined);
-  const usesDb=connects||test.steps.some(s=>s.kind==='db'||s.kind==='php')||Boolean(test.cleanup?.length);
+  const usesDb=connects||test.steps.some(s=>s.kind==='db')||Boolean(test.cleanup?.length);
   if(usesDb&&!envOk)reasons.push('o banco de teste isolado (ORQ_DB_*: banco orq_*, host local, usuário diferente de root) não está disponível');
   if(!all&&usesDb&&!test.steps.some(s=>s.kind==='db'))notes.push('Nenhum código PHP alcançável foi encontrado para as etapas do teste.');
   return{safe:reasons.length===0,reasons:[...new Set(reasons)],notes,connects};

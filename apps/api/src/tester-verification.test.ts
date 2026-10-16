@@ -17,7 +17,8 @@ test('planVerification only plans simple project scripts that the Developer repo
       {command:'php database/seed.php',status:'failed'},                // falhou: não reexecuta
       {command:'php -l database/seed.php',status:'passed'},             // lint: o Tester já faz
       {command:'php database/seed.php && php database/other.php',status:'passed'},
-      {command:'php database/needs-url.php http://127.0.0.1:8099',status:'passed'},
+      {command:'php database/needs-url.php http://127.0.0.1:8099',status:'passed'},   // URL do servidor local: o Tester sobe o servidor (plan.servers)
+      {command:'php database/needs-url.php https://example.com',status:'passed'},     // URL externa: nunca
       {command:'php src/app.php',status:'passed'},                      // fora das pastas de verificação
       {command:'php ../../etc/x.php',status:'passed'},
       {command:'php database/gone.php',status:'passed'},
@@ -26,7 +27,8 @@ test('planVerification only plans simple project scripts that the Developer repo
     ],{location:root,env:{}});
     assert.deepEqual(plan.commands.map(c=>[c.executable,...c.args].join(' ')),['php database/seed.php','node scripts/check.js --fast']);
     const reasons=plan.skipped.map(s=>s.reason).join(' | ');
-    for(const expected of [/composto/,/servidor em execução/,/fora das pastas/,/não existe/,/usa banco de dados/])assert.match(reasons,expected);
+    for(const expected of [/composto/,/não é o servidor local/,/fora das pastas/,/não existe/,/usa banco de dados/])assert.match(reasons,expected);
+    assert.deepEqual(plan.servers.map(server=>[server.command.args.join(' '),server.urlArg,server.url]),[['database/needs-url.php http://127.0.0.1:8099',1,'http://127.0.0.1:8099']]);
     assert.equal(planVerification([{command:'php database/db.php',status:'passed'}],{location:root,env:{ORQ_DB_NAME:'orq_x'}}).commands.length,1,'with a test database the DB script is allowed');
     assert.equal(planVerification(undefined,{location:root}).commands.length,0);
   }finally{rmSync(root,{recursive:true,force:true});}

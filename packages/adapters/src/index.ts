@@ -30,6 +30,7 @@ export type {BrowserScenarioResult,BrowserScenarioStepResult} from './browser-sc
 export {extractPermissionDenials} from './claude-denials.js';
 export type {PermissionDenial} from './claude-denials.js';
 export {planVerification,VERIFICATION_TIMEOUT_MS} from './verification.js';
+export {runServerVerification} from './server-verification.js';
 export type {DeveloperTest,VerificationPlan} from './verification.js';
 
 export {analyzeProjectFlows,renderFlowPlan,requiredFlows} from './flow-intelligence.js';

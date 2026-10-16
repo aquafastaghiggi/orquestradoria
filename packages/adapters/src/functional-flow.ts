@@ -115,7 +115,7 @@ try{
 }catch(Throwable $e){fwrite(STDERR,'erro de banco (código '.$e->getCode().')');exit(2);}
 `;
 
-const phpBinary=(env:Record<string,string|undefined>)=>{
+export const phpBinary=(env:Record<string,string|undefined>)=>{
   const candidates=[env.PHP_BIN,process.platform==='win32'?'C:/xampp/php/php.exe':undefined,'php'].filter((c):c is string=>Boolean(c));
   for(const candidate of candidates){try{if(spawnSync(candidate,['-v'],{encoding:'utf8',windowsHide:true}).status===0)return candidate;}catch{/* tenta o próximo */}}
   return null;
