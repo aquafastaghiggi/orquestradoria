@@ -15,7 +15,7 @@ export type {CliSpawn,CommandInvocation,CliProcessResult} from './cli-process.js
 export {CommandTesterAdapter,buildTesterSummary,browserPlan,detectProjectProfile,normalizeAssignedFiles} from './tester.js';
 export {ClaudeCodeMissionPlanner,buildMissionPlannerPrompt,normalizeMissionPlannerOutput} from './mission-planner.js';
 export {AnthropicMissionPlanner} from './anthropic-mission-planner.js';
-export {parseClaudeStructuredText} from './claude.js';
+export {parseClaudeStructuredText,sanitizeAllowedTools,DEFAULT_CLAUDE_ALLOWED_TOOLS,DEFAULT_CLAUDE_DISALLOWED_TOOLS} from './claude.js';
 export {claudeUsageDetails,extractClaudeUsage} from './claude-usage.js';
 export {finalModelText,listWorkspaceChanges,recoverDeveloperResult} from './claude-recovery.js';
 export type {ClaudeUsage} from './claude-usage.js';
