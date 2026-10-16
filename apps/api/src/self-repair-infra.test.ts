@@ -156,7 +156,7 @@ for(const manager of ['npm','pnpm'] as const){
       assert.equal(command.command,`${manager} run typecheck`,'linha de comando completa');assert.equal(command.cwd,dir);
       assert.match(command.stderr,/error TS2362: src\/sum\.js\(1,29\): o operador - foi usado onde \+ era esperado/);assert.match(command.stderr,/Found 1 error in src\/sum\.js:1/);
       assert.equal(command.stderr.includes('\u001b'),false,'sem códigos de cor');
-      assert.match(command.stdout,/FIM-DA-SAIDA-PADRAO\s*$/,'a saída é cortada no meio, nunca no fim (onde está o erro)');assert.match(command.stdout,/truncated \d+ chars/);
+      assert.match(command.stdout,/FIM-DA-SAIDA-PADRAO[\s\S]{0,400}$/,'a saída é cortada no meio, nunca no fim: o final do script e o rodapé do gerenciador de pacotes (por exemplo ELIFECYCLE do pnpm) permanecem');assert.match(command.stdout,/truncated \d+ chars/);
       // o ciclo de correção recebe o mesmo detalhe
       const issue=testerIssues({structuredResult:result} as any).join('\n');
       assert.match(issue,new RegExp(`Command line: ${manager} run typecheck \\(cwd `));assert.match(issue,/stderr \(end\): .*Found 1 error in src\/sum\.js:1/s);assert.match(issue,/stdout \(end\): .*FIM-DA-SAIDA-PADRAO/s);

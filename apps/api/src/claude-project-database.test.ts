@@ -67,12 +67,10 @@ test('Developer may use simple read-only commands but still not env/printenv (cr
   assert.match(seen.prompt,/ONE simple command per Bash call/);assert.match(seen.prompt,/"questions"/);
 });
 
-test('curl is allowed only against this computer, and the real-database rule is in the Developer prompt',async()=>{
+test('curl is not available to the Developer, and the real-database rule is in the Developer prompt',async()=>{
   const seen=await run({ORQ_DB_NAME:'orq_abc123'});
-  const tools=seen.args.join(' ');
-  assert.ok(tools.includes('Bash(curl http://127.0.0.1:*)')&&tools.includes('Bash(curl -s http://127.0.0.1:*)')&&tools.includes('Bash(curl http://localhost:*)'));
-  assert.equal(/Bash\(curl:\*\)|Bash\(curl \*\)/.test(tools),false,'no unrestricted curl');
-  assert.equal(/Bash\(curl[^)]*https?:\/\/(?!127\.0\.0\.1|localhost)/.test(tools),false,'no external host');
+  const allowed=seen.args.join(' ').split('--disallowedTools')[0];
+  assert.equal(/Bash\(\s*curl/i.test(allowed),false,'no curl rule is allowed, local or not');
   assert.match(seen.prompt,/must not create them there/);assert.match(seen.prompt,/do NOT ask for permission/);
-  assert.match(seen.prompt,/curl is allowed only against http:\/\/127\.0\.0\.1/);
+  assert.match(seen.prompt,/curl is NOT available/);assert.match(seen.prompt,/declare http steps \(GET or POST\) in functionalFlows/);
 });
