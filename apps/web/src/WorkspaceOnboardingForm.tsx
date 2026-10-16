@@ -12,14 +12,16 @@ const post=async(url:string,body?:unknown)=>{
 };
 
 export default function WorkspaceOnboardingForm({onClose,onCreated,notify}:Props){
-  const[location,setLocation]=useState(''),[name,setName]=useState(''),[info,setInfo]=useState<Inspection|null>(null),[busy,setBusy]=useState(false);
+  const[location,setLocation]=useState(''),[name,setName]=useState(''),[lastSuggested,setLastSuggested]=useState(''),[info,setInfo]=useState<Inspection|null>(null),[busy,setBusy]=useState(false);
 
   const inspect=async(path:string)=>{
     if(!path.trim()){setInfo(null);return;}
     try{
       const result:Inspection=await post('/api/workspaces/inspect',{location:path});
       setInfo(result);setLocation(result.location);
-      if(!name.trim())setName(result.suggestedName);
+      // o nome acompanha a pasta enquanto o usuário não o editou (corrigir um caminho errado não deixa o nome antigo)
+      if(!name.trim()||name===lastSuggested)setName(result.suggestedName);
+      setLastSuggested(result.suggestedName);
     }catch(error){notify(error instanceof Error?error.message:'Falha ao validar a pasta.','error');}
   };
   const pick=async()=>{

@@ -68,6 +68,7 @@ async function main(){
   page.on('response',r=>{if(r.url().includes('/api/')&&r.status()>=400)apiErrors.push(`${r.status()} ${r.request().method()} ${r.url().replace(WEB,'')}`);});
   page.on('dialog',d=>d.accept());
   const text=async(sel)=>(await page.locator(sel).first().innerText().catch(()=>'')).replace(/\n+/g,' | ');
+  const popupHas=async(popup,pattern,ms=15000)=>{if(!popup)return false;const end=Date.now()+ms;while(Date.now()<end){try{if(pattern.test(await popup.locator('body').innerText()))return true;}catch{/* ainda carregando */}await sleep(300);}return false;};
   const buttons=async()=>(await page.locator('.modal button, [role=dialog] button').allInnerTexts()).map(s=>s.trim()).filter(Boolean);
 
   try{
@@ -86,7 +87,7 @@ async function main(){
     pass('Projeto criado e missão aberta com "Gerar plano"');
     const project=join(parent,'smoke-projeto');
     check(existsSync(join(project,'.git')),'Pasta do projeto criada com Git');
-    writeFileSync(join(project,'index.html'),'<h1>Minhas tarefas</h1>');git(project,'add','.');git(project,'commit','-q','-m','pagina');
+    writeFileSync(join(project,'index.html'),'<h1>Minhas tarefas</h1>');git(project,'add','.');try{git(project,'commit','-q','-m','pagina');}catch{/* nada novo a commitar */}
 
     // 2) plano → aprovar → executar
     await page.getByRole('button',{name:'Gerar plano'}).click();
@@ -100,7 +101,7 @@ async function main(){
     // 3) preview
     const card=page.locator('.task-preview-card');
     const [popup]=await Promise.all([page.context().waitForEvent('page',{timeout:15000}).catch(()=>null),card.getByRole('button',{name:/Abrir preview/}).click()]);
-    check(Boolean(popup)&&/Minhas tarefas/.test(await popup.locator('body').innerText()),'Preview serve a página do worktree');
+    check(await popupHas(popup,/Minhas tarefas/),'Preview serve a página do worktree');
     await page.bringToFront();
     await card.getByRole('button',{name:'Parar preview'}).click();
     await page.waitForTimeout(800);
@@ -157,6 +158,101 @@ async function main(){
     pass('Quadro de trabalho do workspace carrega');
     const waiting=(await page.locator('.summary-card').filter({hasText:'Aguardando ação'}).locator('strong').first().innerText()).trim();
     check(waiting==='0','Painel não mostra tasks "aguardando ação" depois do Apply',`valor: ${waiting}`);
+
+
+    // 8) FLUXO POR TASK em um projeto existente (cadastro por pasta), tudo pela interface, com Mock
+    const other=git(project,'rev-parse','HEAD');                       // o outro projeto não pode ser tocado por este fluxo
+    const taskProject=join(parent,'tasks-projeto');mkdirSync(taskProject,{recursive:true});
+    git(taskProject,'init','-q','-b','main');git(taskProject,'config','user.email','smoke@localhost');git(taskProject,'config','user.name','smoke');
+    writeFileSync(join(taskProject,'index.html'),'<h1>Projeto por pasta</h1>');git(taskProject,'add','.');git(taskProject,'commit','-q','-m','inicial');
+    const taskProjectHead=git(taskProject,'rev-parse','HEAD');
+
+    await page.goto(WEB);await page.waitForSelector('.mode-banner');
+    await page.locator('aside').getByText('Workspaces').first().click();
+    await page.getByRole('button',{name:/Novo workspace|Registrar workspace/}).first().click();
+    await page.getByRole('button',{name:'Pasta existente'}).click();
+    await page.getByLabel('Pasta do projeto').fill(join(parent,'pasta-que-nao-existe'));
+    await page.getByLabel('Nome').click();
+    await page.waitForFunction(()=>/n[ãa]o existe|inv[áa]lid|n[ãa]o encontrad|Ajustes necess[áa]rios|n[ãa]o foi poss[íi]vel|erro/i.test(document.querySelector('.modal')?.innerText||'')||Boolean(document.querySelector('.toast.error')),null,{timeout:15000});
+    check(await page.getByRole('button',{name:'Registrar workspace'}).isDisabled(),'Pasta inexistente: mensagem de erro e "Registrar workspace" bloqueado');
+    await page.getByLabel('Pasta do projeto').fill(taskProject);
+    await page.getByLabel('Nome').click();                               // tira o foco do campo: valida a pasta
+    await page.getByText('Pronto para usar').waitFor({timeout:20000});
+    check(/Git: branch/.test(await text('.modal')),'Cadastro por pasta valida a pasta e mostra Git/stack');
+    await page.getByRole('button',{name:'Registrar workspace'}).click();
+    await page.locator('.workspace-banner, .workspace-detail-grid').first().waitFor({timeout:20000});
+    pass('Projeto cadastrado por pasta e workspace aberto');
+
+    await page.getByRole('button',{name:/Nova task/}).first().click();
+    const taskDialog=page.getByRole('dialog',{name:'Criar task'});await taskDialog.waitFor();
+    check(await taskDialog.getByRole('button',{name:'Criar task'}).isDisabled(),'"Criar task" fica desabilitado sem título e prompt');
+    await taskDialog.getByLabel('Título').fill('Trocar o título da página');
+    await taskDialog.getByLabel(/Prompt final/).fill('Troque o título da página para "Olá, mundo".');
+    await taskDialog.getByRole('button',{name:'Criar task'}).click();
+    await page.locator('.task-detail-page').waitFor({timeout:20000});
+    pass('Task criada com prompt e aberta');
+    check(/Executar pipeline/.test(await text('.task-toolbar')),'Task pendente oferece "Executar pipeline"');
+
+    await page.getByRole('button',{name:/Executar pipeline/}).click();
+    await page.getByRole('button',{name:/Aplicar na/}).first().waitFor({timeout:180000});
+    const stages=await page.locator('.pipeline-card').allInnerTexts();
+    check(stages.length===4&&['Planner','Developer','Tester','Reviewer'].every((role,i)=>new RegExp(role,'i').test(stages[i])),'Planner/Developer/Tester/Reviewer aparecem na ordem',stages.map(x=>x.replace(/\n+/g,' ')).join(' || '));
+    check(stages.every(x=>/conclu|completed|aprov/i.test(x)),'Todas as 4 etapas terminaram',stages.map(x=>x.replace(/\n+/g,' ')).join(' || '));
+    check(git(taskProject,'rev-parse','HEAD')===taskProjectHead&&git(taskProject,'status','--porcelain')==='','Nada foi aplicado sozinho: o projeto continua intacto até o usuário aplicar');
+
+    await page.getByRole('button',{name:'Logs'}).click();
+    await page.locator('.logs-panel').waitFor({timeout:10000});
+    check((await text('.logs-panel')).trim().length>20,'Aba Logs mostra eventos da execução');
+    await page.getByRole('button',{name:'Execuções'}).click();
+    check((await page.locator('.execution').count())>=4,'Aba Execuções lista as etapas executadas');
+
+    const taskCard=page.locator('.task-preview-card');
+    const [taskPopup]=await Promise.all([page.context().waitForEvent('page',{timeout:15000}).catch(()=>null),taskCard.getByRole('button',{name:/Abrir preview/}).click()]);
+    check(await popupHas(taskPopup,/Projeto por pasta/),'Preview isolado da task serve a página do worktree');
+    await page.bringToFront();
+    await taskCard.getByRole('button',{name:'Parar preview'}).click();
+    await page.waitForTimeout(800);
+
+    await taskCard.locator('textarea').fill('Deixe o título em negrito');
+    await taskCard.getByRole('button',{name:'Solicitar ajuste'}).click();
+    try{await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>/Aplicar na/i.test(b.textContent||''))&&/Ajuste 1|rodada 1/i.test(document.body.innerText),null,{timeout:90000});}
+    catch(error){throw new Error(`Ajuste não concluiu. Cartão: ${(await text('.task-preview-card')).slice(0,400)} | Cabeçalho: ${(await text('.task-header')).slice(0,200)} | API>=400: ${apiErrors.join(', ')||'nenhuma'}`);}
+    pass('Ajuste solicitado e executado na mesma task');
+
+    // o Mock não escreve arquivos: simula o trabalho do Developer no WORKTREE da task (nunca no projeto)
+    const wsList=await (await fetch(`${API}/api/workspaces`)).json();
+    const taskWs=wsList.find(w=>w.name==='tasks-projeto');
+    const tasksOfWs=await (await fetch(`${API}/api/workspaces/${taskWs.id}`)).json().catch(()=>({}));
+    const dashboard=await (await fetch(`${API}/api/dashboard`)).json().catch(()=>({}));
+    const allTasks=(dashboard.tasks||dashboard.recentTasks||[]).filter(t=>t.workspaceId===taskWs.id);
+    const taskId=(allTasks[0]||{}).id||(tasksOfWs.tasks||[])[0]?.id;
+    check(Boolean(taskId),'Task encontrada pela API para simular o trabalho do Developer');
+    const taskDetail=await (await fetch(`${API}/api/tasks/${taskId}`)).json();
+    writeFileSync(join(taskDetail.worktreePath,'titulo.txt'),'Olá, mundo');
+    check(!existsSync(join(taskProject,'titulo.txt')),'O arquivo existe só no worktree isolado, não no projeto');
+
+    await page.getByRole('button',{name:/Aplicar na/}).first().click();
+    await page.locator('.modal').filter({hasText:'Aplicar alterações'}).locator('.modal-foot .primary').click();
+    await page.getByText(/APLICADO NA|aplicad/i).first().waitFor({timeout:30000});
+    check(existsSync(join(taskProject,'titulo.txt')),'Aplicar (ação manual do usuário) levou o arquivo para o projeto');
+    check(/apply/i.test(git(taskProject,'log','--format=%s','-n','3')),'Git registrou o commit de apply da task');
+
+    await page.locator('aside').getByText('Workspaces').first().click();
+    await page.locator('.workspace-card').filter({hasText:'tasks-projeto'}).first().click();
+    await page.waitForSelector('.history-board',{timeout:15000});
+    await page.getByRole('button',{name:/Mostrar finalizadas/}).click();
+    const historyText=await text('.history-board');
+    check(historyText.includes('Trocar o título da página')&&/Aplicada na branch principal/.test(historyText)&&/↻ 1/.test(historyText),'Histórico (Finalizadas) lista a task aplicada, com fase e ajuste registrado',historyText.slice(0,300));
+    check(git(project,'rev-parse','HEAD')===other,'Outro projeto (smoke-projeto) não foi alterado pelo fluxo da task');
+    check(pageErrors.length===0,'Nenhum erro JavaScript durante o fluxo por task',pageErrors.join(' | '));
+
+    // 9) Autocorreção no navegador (só leitura: abre a página, não cria nenhuma correção)
+    await page.locator('aside').getByText('Autocorreção').first().click();
+    await page.waitForSelector('.selfrepair-problems, .selfrepair-page .notice',{timeout:20000});
+    const selfText=await text('.selfrepair-page');
+    check(/PROBLEMAS DETECTADOS/.test(selfText)&&/NOVO PEDIDO/.test(selfText)&&/worktree isolado/.test(selfText),'Página Autocorreção abre com problemas detectados, novo pedido e aviso de isolamento',selfText.slice(0,300));
+    check(await page.getByRole('button',{name:'Enviar para autocorreção'}).isDisabled(),'"Enviar para autocorreção" fica bloqueado sem pedido');
+    check((await page.locator('.selfrepair-history .task-row').count())===0,'Nenhuma autocorreção foi criada só por abrir a página');
 
     check(pageErrors.length===0,'Nenhum erro JavaScript na página',pageErrors.join(' | '));
     check(apiErrors.length===0,'Nenhuma resposta de API >= 400',apiErrors.join(' | '));
