@@ -34,5 +34,5 @@ export type {DeveloperTest,VerificationPlan} from './verification.js';
 
 export {analyzeProjectFlows,renderFlowPlan,requiredFlows} from './flow-intelligence.js';
 export type {FlowPlan,FlowPlanFlow,FlowCriterion,FlowPage,Certainty} from './flow-intelligence.js';
-export {runFunctionalFlows,validateFlowTests,flowIssues} from './functional-flow.js';
+export {runFunctionalFlows,validateFlowTests,flowIssues,phpProcessEnv,checkDatabaseIsolation,collectProofs} from './functional-flow.js';
 export type {FlowTest,FlowTestStep,FunctionalFlowReport,FlowRunResult,FlowStepResult} from './functional-flow.js';

@@ -59,3 +59,37 @@ mascaradas na evidência. Arquivos que os fluxos criarem no workspace (uploads d
 - Login e upload são exercitados apenas contra o servidor local e o banco `orq_*`; nunca contra o banco real do projeto.
 - Diretórios criados por um upload de teste permanecem (vazios); só arquivos são removidos.
 - Nenhum Claude/Codex real foi executado na validação: ela usa um fixture PHP de motorista e o MySQL do XAMPP.
+
+## Hotfix: cobertura por provas, isolamento do banco e limpeza precisa
+
+**Cobertura por provas.** `flowId` e `covers` não validam nada. Um fluxo obrigatório só é validado pelas provas das etapas
+**executadas e aprovadas**, correlacionadas pelo mesmo valor enviado no upload:
+
+| Prova | O que precisa existir |
+|-------|-----------------------|
+| login | `POST` na página de login do código, com verificação específica (redirecionamento ou texto) e cookie de sessão recebido |
+| acesso autenticado | depois do login, requisição com a sessão a uma página protegida, com verificação específica |
+| upload | `POST` multipart com arquivo para a página de upload, com verificação específica e, se a página exige sessão, depois do login |
+| gravação | depois do upload, `SELECT` numa tabela que o upload grava, citando o arquivo/valor enviado e esperando ao menos 1 registro |
+| listagem | depois do upload (e da gravação), `GET` na página que lê essa tabela, esperando o valor enviado na resposta |
+
+O fluxo completo exige todas, em ordem, dentro do mesmo teste. Testes superficiais (`GET /` com HTTP 200), `SELECT COUNT(*)` sem
+citar o valor enviado, listagem sem o valor ou upload antes do login deixam o fluxo **não validado** (Tester `BLOCKED`, com a lista
+do que falta).
+
+**Isolamento do banco.** Antes de qualquer PHP/HTTP/SQL de um teste, `checkDatabaseIsolation` analisa os arquivos que o teste pode
+executar (alvos das etapas + `require/include` encadeados). Bloqueia, informando arquivo e motivo, quando: o banco isolado
+(`ORQ_DB_*`, banco `orq_*`, host local, usuário diferente de `root`) não está disponível; o código que conecta (`PDO`, `mysqli`)
+não lê `ORQ_DB_HOST/USER/PASSWORD/NAME`; usa o usuário `root`; ou tem um `dbname` fixo que não é `orq_*`. Nada é executado nesses
+casos e nunca se cai para credenciais reais. Os processos PHP também não herdam `DB_*`, `MYSQL_*`, `DATABASE_URL` etc. do host.
+
+**Limpeza precisa.** Só são removidos arquivos que uma etapa comprovadamente criou (diferença de arquivos por etapa; arquivos
+preexistentes nunca são apagados) e diretórios novos que ficaram vazios. Arquivos preexistentes alterados pelo PHP são preservados
+e reportados. No banco, a limpeza aceita apenas `DELETE FROM t WHERE ...` (o `WHERE` precisa citar um valor criado pelo teste) e
+`DROP TABLE IF EXISTS` de tabela criada pelo teste; `TRUNCATE` e `DELETE` sem `WHERE` são rejeitados, e registros que já existiam
+antes do teste são preservados.
+
+Limitações do hotfix: a análise de isolamento é estática (regex sobre PHP): código que monta a conexão de forma dinâmica fora das
+formas reconhecidas, ou lê credenciais de um `.env`/`.ini`, é bloqueado por não ler `ORQ_DB_*`, mas um código que lê `ORQ_DB_*` e
+ainda assim conecta a outro lugar por um caminho não analisado não é detectado. Arquivos criados por outro processo durante o
+teste seriam confundidos com os do teste.
