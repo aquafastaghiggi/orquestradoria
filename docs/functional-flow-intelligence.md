@@ -93,3 +93,28 @@ Limitações do hotfix: a análise de isolamento é estática (regex sobre PHP):
 formas reconhecidas, ou lê credenciais de um `.env`/`.ini`, é bloqueado por não ler `ORQ_DB_*`, mas um código que lê `ORQ_DB_*` e
 ainda assim conecta a outro lugar por um caminho não analisado não é detectado. Arquivos criados por outro processo durante o
 teste seriam confundidos com os do teste.
+
+## Isolamento do PHP (`database-isolation.ts`)
+
+`checkDatabaseIsolation` agora **prova** o isolamento em vez de procurar a palavra `ORQ_DB_*` no código. Só o código PHP (sem HTML
+nem comentários) alcançável pelo teste é analisado; o que não puder ser determinado com segurança **bloqueia**, antes de qualquer
+PHP/HTTP/SQL.
+
+- **Origem de cada conexão.** Em `new PDO`, `new mysqli`, `mysqli_connect`, `real_connect`, host, usuário, senha e banco são rastreados
+  (literais, variáveis, constantes, `define`, interpolação, concatenação, `sprintf`) até leituras de `ORQ_DB_*`. Ler `ORQ_DB_NAME`
+  e montar o DSN com `dbname=controle_notas` (direto, por variável, por constante ou por sufixo fixo) é bloqueado; usuário, senha e
+  banco precisam vir de `ORQ_DB_USER`, `ORQ_DB_PASSWORD` e `ORQ_DB_NAME`; o host, de `ORQ_DB_HOST` ou ser local. Um valor padrão
+  (`getenv('ORQ_DB_NAME') ?: 'x'`) é aceito só quando a origem principal é `ORQ_DB_*` (o ambiente do teste define todas), com nota.
+- **Código que pode ocultar a conexão** bloqueia: `include`/`require` dinâmicos, que não resolvem para um arquivo do projeto ou de
+  recurso externo; `eval`, `new $classe`, variáveis variáveis, chamadas dinâmicas, autoload dinâmico, `auto_prepend_file`;
+  camadas de banco de terceiros (Doctrine, Eloquent, wpdb…); outros motores (pg, oci, sqlsrv, SQLite, Mongo); extensão `mysql_*`
+  legada; `USE outro_banco`; e `outro_banco.tabela` em consultas.
+- **Includes literais** (`__DIR__ . '/db.php'`, `dirname(__FILE__)`, valores fixos por variável) são seguidos e também analisados.
+- O fluxo legítimo (conexão toda derivada de `ORQ_DB_*`) continua liberado.
+
+Limitações: continua sendo análise estática de PHP. Qualquer padrão que ela não reconheça é bloqueado (pode haver falso bloqueio, por
+exemplo conexão montada por parâmetro de função ou array de configuração); código dentro de `vendor/` não é lido, então só as
+camadas de banco de terceiros conhecidas são detectadas.
+
+Correção junto: o executor agora espera o servidor PHP embutido sair antes de limpar (no Windows ele segurava o diretório e o
+teste falhava de forma intermitente com EBUSY).

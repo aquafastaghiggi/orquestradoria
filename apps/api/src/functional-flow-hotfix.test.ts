@@ -94,7 +94,7 @@ test('isolamento: o motivo do bloqueio aponta o arquivo e o problema',async()=>{
     const result:any=await runProposed(root,FAKE_ISOLATED,[proofRequest({steps:uploadStep()})]);
     const message=result.functionalFlows.impossible.join(' ');
     assert.match(message,/upload\.php: o banco "controle_notas" está fixo no código/);
-    assert.match(message,/não lê ORQ_DB_/);
+    assert.match(message,/deveria usar ORQ_DB_NAME/);
   }finally{rmSync(root,{recursive:true,force:true});}
 });
 

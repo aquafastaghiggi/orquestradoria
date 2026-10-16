@@ -4,6 +4,8 @@ import {tmpdir} from 'node:os';
 import {dirname,join,relative,resolve,sep} from 'node:path';
 import {getFreeLocalPort} from '@orchestrator/workspace';
 import {requiredFlows,type FlowPage,type FlowPlan} from './flow-intelligence.js';
+import {checkDatabaseIsolation} from './database-isolation.js';
+export {checkDatabaseIsolation} from './database-isolation.js';
 
 /**
  * Testes funcionais de ponta a ponta (PHP + HTTP local + MySQL ORQ_DB_*). O Developer declara os fluxos; o Tester os
@@ -126,71 +128,6 @@ export function phpProcessEnv(base:NodeJS.ProcessEnv,orq:Record<string,string|un
   for(const [key,value] of Object.entries(base))if(!REAL_DB_ENV.test(key)&&!/^ORQ_DB_/.test(key))out[key]=value;
   for(const [key,value] of Object.entries(orq))if(/^ORQ_DB_/.test(key)&&value!==undefined)out[key]=value;
   return out;
-}
-
-// ---------- isolamento do banco ----------
-const CONNECT=/\bnew\s+\\?PDO\s*\(|\bnew\s+\\?mysqli\s*\(|\bmysqli_connect\s*\(|\bmysql_connect\s*\(/;
-const ORQ_VARS=['ORQ_DB_HOST','ORQ_DB_USER','ORQ_DB_PASSWORD','ORQ_DB_NAME'] as const;
-const readsOrq=(source:string,name:string)=>new RegExp(`(?:getenv\\(\\s*|\\$_(?:ENV|SERVER)\\[\\s*)['"]${name}['"]`).test(source);
-const INCLUDE=/\b(?:require|include)(?:_once)?\s*\(?\s*(?:__DIR__\s*\.\s*)?['"]([^'"$]+)['"]/g;
-const ROOT_LITERAL=/(?:new\s+\\?(?:PDO|mysqli)\s*\([^)]*['"]root['"]|mysqli_connect\s*\([^)]*['"]root['"]|mysql_connect\s*\([^)]*['"]root['"]|\b(?:user|username|db_user)['"]?\s*(?:=>|=|,)\s*['"]root['"])/i;
-const LITERAL_DBNAME=/dbname\s*=\s*([A-Za-z_][A-Za-z0-9_]*)(?=[;'"\s])/g;
-
-function readSource(path:string){try{const stat=lstatSync(path);if(!stat.isFile()||stat.size>400*1024)return null;return readFileSync(path,'utf8');}catch{return null;}}
-
-function targetFiles(location:string,test:FlowTest):string[]{
-  const files=new Set<string>();
-  const add=(rel:string)=>{const abs=resolve(location,rel);if(abs.startsWith(resolve(location)+sep)&&existsSync(abs)&&lstatSync(abs).isFile())files.add(abs);};
-  for(const step of test.steps){
-    if(step.kind==='php')add(step.script);
-    if(step.kind==='http'){
-      const pathname=decodeURIComponent(step.path.split('?')[0].split('#')[0]).replace(/^\/+/,'');
-      if(!pathname||pathname.endsWith('/')){add(join(pathname,'index.php'));continue;}
-      const abs=resolve(location,pathname);
-      if(abs.startsWith(resolve(location)+sep)&&existsSync(abs)&&lstatSync(abs).isFile())add(pathname);
-      else add('index.php'); // o servidor embutido do PHP cai no index.php da raiz
-    }
-  }
-  return[...files];
-}
-
-function includeClosure(location:string,start:string[]):string[]{
-  const seen=new Set<string>(),queue=[...start];
-  while(queue.length&&seen.size<40){
-    const file=queue.shift()!;if(seen.has(file))continue;seen.add(file);
-    const source=readSource(file);if(source===null)continue;
-    for(const match of source.matchAll(INCLUDE)){
-      const rel=match[1];const candidates=[resolve(dirname(file),rel.replace(/^\/+/,'')),resolve(location,rel.replace(/^\/+/,''))];
-      for(const candidate of candidates){if(candidate.startsWith(resolve(location)+sep)&&existsSync(candidate)&&!seen.has(candidate)){queue.push(candidate);break;}}
-    }
-  }
-  return[...seen];
-}
-
-export interface IsolationVerdict{safe:boolean;reasons:string[];notes:string[];connects:boolean}
-/**
- * Antes de executar PHP/HTTP que possa gravar dados: o código alcançável pelo teste só pode usar o banco isolado.
- * Sem garantia suficiente, bloqueia e informa o motivo. Nunca cai para credenciais reais.
- */
-export function checkDatabaseIsolation(location:string,test:FlowTest,env:Record<string,string|undefined>):IsolationVerdict{
-  const reasons:string[]=[],notes:string[]=[];
-  const files=includeClosure(location,targetFiles(location,test));
-  const sources=files.map(file=>({file:relative(location,file).replace(/\\/g,'/'),source:readSource(file)||''}));
-  const connecting=sources.filter(item=>CONNECT.test(item.source));
-  const connects=connecting.length>0;
-  const envOk=Boolean(env.ORQ_DB_NAME&&DB_NAME.test(env.ORQ_DB_NAME)&&env.ORQ_DB_USER&&env.ORQ_DB_USER.toLowerCase()!=='root'&&env.ORQ_DB_HOST&&LOCAL_HOSTS.has(env.ORQ_DB_HOST.toLowerCase())&&env.ORQ_DB_PORT);
-  const usesDb=connects||test.steps.some(s=>s.kind==='db'||s.kind==='php')||Boolean(test.cleanup?.length);
-  if(usesDb&&!envOk)reasons.push('o banco de teste isolado (ORQ_DB_*: banco orq_*, host local, usuário diferente de root) não está disponível');
-  if(connects){
-    const all=sources.map(item=>item.source).join('\n');
-    for(const name of ORQ_VARS)if(!readsOrq(all,name))reasons.push(`o código que conecta ao MySQL (${connecting.map(c=>c.file).join(', ')}) não lê ${name}; poderia usar um banco real`);
-    for(const item of sources){
-      if(ROOT_LITERAL.test(item.source))reasons.push(`${item.file}: usa o usuário root do MySQL`);
-      for(const match of item.source.matchAll(LITERAL_DBNAME))if(!match[1].startsWith('orq_'))reasons.push(`${item.file}: o banco "${match[1]}" está fixo no código`);
-    }
-    if(!reasons.length&&sources.some(item=>/getenv\(\s*['"]ORQ_DB_[A-Z]+['"]\s*\)\s*(?:\?:|\?\?|\|\|)/.test(item.source)))notes.push('O código tem valores padrão para ORQ_DB_*; como o ambiente do teste define todas as variáveis, o padrão não é usado.');
-  }
-  return{safe:reasons.length===0,reasons:[...new Set(reasons)],notes,connects};
 }
 
 // ---------- provas por etapa ----------
@@ -478,7 +415,16 @@ export async function runFunctionalFlows(options:RunFlowsOptions):Promise<Functi
     if(report.flows.some(f=>f.status==='FAILED'))report.status='FAILED';
     else if(report.required.some(r=>!r.validated)||report.flows.some(f=>f.status==='BLOCKED'))report.status='BLOCKED';
   }finally{
-    if(server){try{server.kill();}catch{/* já encerrado */}}
+    if(server){
+      // Espera o servidor PHP realmente sair: no Windows ele segura o diretório do projeto enquanto vive.
+      const child=server;
+      await new Promise<void>(done=>{
+        if(child.exitCode!==null||child.signalCode!==null)return done();
+        const timer=setTimeout(done,3000);
+        child.once('exit',()=>{clearTimeout(timer);done();});
+        try{child.kill();}catch{clearTimeout(timer);done();}
+      });
+    }
     // Limpeza de arquivos: só o que uma etapa comprovadamente criou. Arquivos preexistentes nunca são apagados.
     const removed:string[]=[];
     for(const [file,stepId] of created){
