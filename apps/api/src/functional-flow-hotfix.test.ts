@@ -42,7 +42,7 @@ live('cobertura falsa (MySQL real): login, upload, SELECT e listagem existem mas
     const required=Object.fromEntries(result.functionalFlows.required.map((r:any)=>[r.flowId,r]));
     assert.equal(required['flow-auth'].validated,true,'login e acesso autenticado têm prova própria');
     assert.equal(required['flow-upload'].validated,false);assert.match(required['flow-upload'].reason,/gravação: nenhum SELECT em documentos citando o valor enviado/);
-    assert.equal(required['flow-listing'].validated,false);assert.match(required['flow-listing'].reason,/listagem: nenhum GET em \/conferencia\.php, depois do upload, esperando o valor enviado/);
+    assert.equal(required['flow-listing'].validated,false);assert.match(required['flow-listing'].reason,/listagem: nenhum GET em \/conferencia\.php, depois do upload e do login, esperando na resposta um valor do documento criado no teste/);
     assert.equal(required['flow-completo'].validated,false);
     assert.equal(await countRows(env,'documentos'),0,'o que o teste criou foi limpo');
   });}finally{rmSync(root,{recursive:true,force:true});}

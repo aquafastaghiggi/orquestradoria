@@ -138,7 +138,7 @@ const stem=(name:string)=>name.replace(/\.[^.]+$/,'');
 const tokensOfUpload=(step:Extract<FlowTestStep,{kind:'http'}>)=>[...Object.values(step.files||{}).map(f=>f.name),...Object.values(step.form||{}).filter(v=>v.length>=4)];
 const tableMentioned=(query:string,tables:string[])=>tables.some(table=>new RegExp(`\\b${table}\\b`,'i').test(query));
 
-interface ExecutedStep{spec:FlowTestStep;result:FlowStepResult;hadCookies:boolean;cookiesAfter:number}
+interface ExecutedStep{spec:FlowTestStep;result:FlowStepResult;hadCookies:boolean;cookiesAfter:number;/** o que esta etapa verifica já era verdade ANTES do upload do teste: dado preexistente não é prova */preexisting?:boolean}
 interface PlanTargets{loginRoute?:string;guarded:string[];upload?:FlowPage;lister?:FlowPage;loginPage?:FlowPage}
 const targetsOf=(plan:FlowPlan|undefined):PlanTargets=>{
   const page=(file?:string)=>plan?.pages.find(p=>p.file===file);
@@ -148,11 +148,21 @@ const targetsOf=(plan:FlowPlan|undefined):PlanTargets=>{
   return{loginRoute:loginPage?.route,loginPage,guarded:(plan?.auth.guardedPages||[]).map(f=>`/${f}`),upload:page(uploadFile),lister:page(listFile)};
 };
 
-/** Procura, em ordem, as provas de login, acesso autenticado, upload, gravação e listagem — todas correlacionadas. */
+const MIN_LITERAL=3;
+const literalsOf=(text:string)=>[...text.matchAll(/'([^']{3,})'/g)].map(m=>m[1].replace(/%/g,'')).filter(value=>value.length>=MIN_LITERAL);
+const related=(a:string,b:string)=>a.length>=MIN_LITERAL&&b.length>=MIN_LITERAL&&(a.includes(b)||b.includes(a));
+
+/**
+ * Procura, em ordem, as provas de login, acesso autenticado, upload, gravação e listagem, todas correlacionadas pela MESMA
+ * identidade: os valores que o teste cria e envia no upload (campos do formulário, como o token da NF, e o nome do arquivo)
+ * precisam aparecer na consulta ao MySQL, e o que a consulta devolve/cita (por exemplo o número da NF) precisa aparecer na
+ * listagem. Etapas cujo resultado já valia ANTES do upload (dado preexistente) não contam como prova.
+ */
 export function collectProofs(plan:FlowPlan|undefined,executed:ExecutedStep[]):FlowProofs&{gaps:string[]}{
   const t=targetsOf(plan);const gaps:string[]=[];const proofs:FlowProofs&{gaps:string[]}={orderOk:false,gaps};
   const passed=(i:number)=>executed[i].result.status==='passed';
   const http=(i:number)=>executed[i].spec.kind==='http'?executed[i].spec as Extract<FlowTestStep,{kind:'http'}>:null;
+  const uploadGuarded=Boolean(t.upload?.requiresAuth),listGuarded=Boolean(t.lister?.requiresAuth);
   let loginIdx=-1,uploadIdx=-1,dbIdx=-1,listIdx=-1,authIdx=-1;let token='';
   for(let i=0;i<executed.length;i++){
     const s=http(i);if(!s||!passed(i))continue;
@@ -169,51 +179,57 @@ export function collectProofs(plan:FlowPlan|undefined,executed:ExecutedStep[]):F
     else if(t.guarded.length)gaps.push(`acesso autenticado: nenhuma requisição com a sessão a uma página protegida (${t.guarded[0]}) com verificação específica`);
   }
   const uploadRoutes=[t.upload?.route,...(t.upload?.forms.filter(f=>f.multipart).map(f=>f.action.startsWith('/')?f.action:`/${f.action.replace(/^\.?\//,'')}`)||[])];
-  for(let i=Math.max(loginIdx,-1)+1;i<executed.length;i++){
+  for(let i=0;i<executed.length;i++){
     const s=http(i);if(!s||!passed(i)||s.method!=='POST'||!s.files||!Object.keys(s.files).length)continue;
-    if(!uploadRoutes.some(r=>routeMatches(s.path,r)))continue;
-    if(!meaningful(s))continue;
-    if(t.upload?.requiresAuth&&(loginIdx<0||!executed[i].hadCookies))continue;
+    if(!uploadRoutes.some(r=>routeMatches(s.path,r))||!meaningful(s))continue;
+    if(uploadGuarded&&(loginIdx<0||loginIdx>i||!executed[i].hadCookies))continue;
     uploadIdx=i;token=tokensOfUpload(s)[0]||'';break;
   }
   if(uploadIdx>=0){proofs.upload=executed[uploadIdx].spec.id;proofs.token=token;}
-  else gaps.push(t.upload?`upload: nenhum POST multipart com arquivo em ${t.upload.route} com verificação específica${t.upload.requiresAuth?' e sessão autenticada':''}`:'upload: nenhum ponto de upload foi identificado no código');
-  const written=t.upload?.tablesWritten||[];
-  if(uploadIdx>=0&&written.length){
-    const tokens=tokensOfUpload(executed[uploadIdx].spec as Extract<FlowTestStep,{kind:'http'}>);
+  else gaps.push(t.upload?`upload: nenhum POST multipart com arquivo em ${t.upload.route} com verificação específica${uploadGuarded?' e sessão autenticada':''}`:'upload: nenhum ponto de upload foi identificado no código');
+  const persistTables=(t.upload?.tablesWritten.length?t.upload.tablesWritten:plan?.database.tables.map(table=>table.name))||[];
+  const persistRequired=Boolean(plan?.database.usesDatabase);
+  // identidade criada pelo teste: valores enviados no upload; depois, o que a consulta cita e devolve
+  const identity:string[]=uploadIdx>=0?tokensOfUpload(executed[uploadIdx].spec as Extract<FlowTestStep,{kind:'http'}>).flatMap(value=>[value,stem(value)]).filter(Boolean):[];
+  if(uploadIdx>=0&&persistRequired){
+    let skippedPreexisting=false;
     for(let i=uploadIdx+1;i<executed.length;i++){
       const s=executed[i].spec;if(s.kind!=='db'||!passed(i))continue;
       const nontrivial=s.expect?(s.expect.min!==undefined&&s.expect.min>=1)||(s.expect.equals!==undefined&&s.expect.equals>=1)||s.expect.firstValue!==undefined:true;
-      if(tableMentioned(s.query,written)&&tokens.some(tk=>tk&&(s.query.includes(tk)||s.query.includes(stem(tk))))&&nontrivial){dbIdx=i;break;}
+      if(!(tableMentioned(s.query,persistTables)&&identity.some(value=>s.query.includes(value))&&nontrivial))continue;
+      if(executed[i].preexisting){skippedPreexisting=true;continue;}
+      dbIdx=i;break;
     }
-    if(dbIdx>=0)proofs.persistence=executed[dbIdx].spec.id;
-    else gaps.push(`gravação: nenhum SELECT em ${written.join(', ')} citando o valor enviado no upload (arquivo/campo) e esperando ao menos 1 registro`);
+    if(dbIdx>=0){proofs.persistence=executed[dbIdx].spec.id;const q=executed[dbIdx].spec as Extract<FlowTestStep,{kind:'db'}>;identity.push(...literalsOf(q.query));if(q.expect?.firstValue)identity.push(q.expect.firstValue);}
+    else gaps.push(skippedPreexisting?`gravação: o SELECT em ${persistTables.join(', ')} já era verdadeiro ANTES do upload; dados preexistentes não valem como prova`:`gravação: nenhum SELECT em ${persistTables.join(', ')} citando o valor enviado no upload (token/arquivo) e esperando ao menos 1 registro`);
   }
   if(uploadIdx>=0){
-    const tokens=tokensOfUpload(executed[uploadIdx].spec as Extract<FlowTestStep,{kind:'http'}>);
-    const after=Math.max(uploadIdx,dbIdx);
+    const after=Math.max(uploadIdx,dbIdx);let skippedPreexisting=false;
     for(let i=after+1;i<executed.length;i++){
       const s=http(i);if(!s||!passed(i)||s.method!=='GET'||!routeMatches(s.path,t.lister?.route))continue;
-      if(tokens.some(tk=>tk&&s.expect?.bodyIncludes?.some(text=>text.includes(tk)||text.includes(stem(tk))))){listIdx=i;break;}
+      if(listGuarded&&(loginIdx<0||loginIdx>i||!executed[i].hadCookies))continue;
+      if(!s.expect?.bodyIncludes?.some(text=>identity.some(value=>related(text,value))))continue;
+      if(executed[i].preexisting){skippedPreexisting=true;continue;}
+      listIdx=i;break;
     }
     if(listIdx>=0)proofs.listing=executed[listIdx].spec.id;
-    else gaps.push(t.lister?`listagem: nenhum GET em ${t.lister.route}, depois do upload, esperando o valor enviado (${token||'arquivo'}) na resposta`:'listagem: nenhuma página que liste os dados enviados foi identificada no código');
+    else gaps.push(!t.lister?'listagem: nenhuma página que liste os dados enviados foi identificada no código':skippedPreexisting?`listagem: ${t.lister.route} já mostrava o texto esperado ANTES do upload; dados preexistentes não valem como prova`:`listagem: nenhum GET em ${t.lister.route}, depois do upload${listGuarded?' e do login':''}, esperando na resposta um valor do documento criado no teste (${token||'arquivo'} ou o que a consulta ao MySQL devolveu)`);
   }else gaps.push('listagem: sem upload provado não há o que listar');
-  proofs.orderOk=loginIdx>=0&&uploadIdx>loginIdx&&(!written.length||dbIdx>uploadIdx)&&listIdx>Math.max(uploadIdx,dbIdx);
+  proofs.orderOk=uploadIdx>=0&&(!uploadGuarded||(loginIdx>=0&&loginIdx<uploadIdx))&&(!persistRequired||dbIdx>uploadIdx)&&listIdx>Math.max(uploadIdx,dbIdx)&&(!listGuarded||(loginIdx>=0&&loginIdx<listIdx))&&(loginIdx>=0||!t.loginRoute);
   return proofs;
 }
 
 type RunProofs=FlowProofs&{gaps:string[]};
 /** Um fluxo obrigatório só vale com as provas próprias dele (e, no completo, todas juntas, em ordem, no mesmo teste). */
 function validateRequired(flow:{id:string},runs:Array<{status:string;proofs:RunProofs}>,plan:FlowPlan|undefined):{validated:boolean;reason?:string}{
-  const t=targetsOf(plan);const written=(t.upload?.tablesWritten||[]).length>0;
+  const t=targetsOf(plan);const written=Boolean(plan?.database.usesDatabase);
   const okRuns=runs.filter(run=>run.status==='PASSED');
   if(!runs.length)return{validated:false,reason:'nenhum teste funcional foi declarado para este fluxo obrigatório'};
   if(!okRuns.length)return{validated:false,reason:runs.some(run=>run.status==='BLOCKED')?'o fluxo não pôde ser executado (verificação impossível ou bloqueada por segurança; veja o motivo)':'o teste do fluxo não passou'};
   const rules:Record<string,(p:RunProofs)=>boolean>={
     'flow-auth':p=>Boolean(p.login)&&(!t.guarded.length||Boolean(p.authenticatedAccess)),
     'flow-upload':p=>(!t.upload?.requiresAuth||Boolean(p.login))&&Boolean(p.upload)&&(!written||Boolean(p.persistence)),
-    'flow-listing':p=>Boolean(p.upload)&&Boolean(p.listing),
+    'flow-listing':p=>Boolean(p.upload)&&Boolean(p.listing)&&(!t.lister?.requiresAuth||Boolean(p.login)),
     'flow-completo':p=>Boolean(p.login)&&(!t.guarded.length||Boolean(p.authenticatedAccess))&&Boolean(p.upload)&&(!written||Boolean(p.persistence))&&Boolean(p.listing)&&p.orderOk
   };
   const rule=rules[flow.id];if(!rule)return{validated:okRuns.length>0};
@@ -354,7 +370,7 @@ export async function runFunctionalFlows(options:RunFlowsOptions):Promise<Functi
   };
 
   /** Valores que o próprio teste cria/usa: só registros que os citam podem ser limpos. */
-  const testTokens=(test:FlowTest)=>{const out=new Set<string>();for(const s of test.steps){if(s.kind==='http'){for(const v of Object.values(s.form||{}))if(v.length>=4)out.add(v);for(const f of Object.values(s.files||{})){out.add(f.name);out.add(stem(f.name));}}if(s.kind==='db')for(const m of s.query.matchAll(/'([^']{4,})'/g))out.add(m[1].replace(/%/g,''));}return[...out].filter(Boolean);};
+  const testTokens=(test:FlowTest)=>{const out=new Set<string>();for(const s of test.steps){if(s.kind==='http'){for(const v of Object.values(s.form||{}))if(v.length>=4)out.add(v);for(const f of Object.values(s.files||{})){out.add(f.name);out.add(stem(f.name));}}if(s.kind==='db'){for(const m of s.query.matchAll(/'([^']{4,})'/g))out.add(m[1].replace(/%/g,''));if(s.expect?.firstValue)out.add(s.expect.firstValue);}if(s.kind==='http')for(const text of s.expect?.bodyIncludes||[])if(text.length>=4)out.add(text);}return[...out].filter(Boolean);};
 
   const executedByTest:Array<{flowId:string;status:string;proofs:RunProofs}>=[];
   try{
@@ -376,10 +392,18 @@ export async function runFunctionalFlows(options:RunFlowsOptions):Promise<Functi
         const listing=await sql('query',"SELECT GROUP_CONCAT(table_name SEPARATOR ',') FROM information_schema.tables WHERE table_schema=DATABASE()");
         try{if(listing.code!==0)throw new Error('sem lista');const first=JSON.parse(listing.stdout).first as string|null;tablesBefore=new Set((first||'').split(',').filter(Boolean).map(n=>n.toLowerCase()));}catch{tablesBefore=new Set(['*']);}
       }
-      for(const step of test.steps){
+      const alreadyTrue=new Set<string>();
+      for(const [stepIndex,step] of test.steps.entries()){
+        if(!failed&&!blocked&&verdict.safe&&php&&step.kind==='http'&&step.method==='POST'&&step.files&&Object.keys(step.files).length){
+          // Antes do upload do teste: uma consulta ou listagem posterior que JÁ passa só pode estar vendo dado preexistente.
+          for(const later of test.steps.slice(stepIndex+1)){
+            if(later.kind==='db'){if((await runStep(later)).status==='passed')alreadyTrue.add(later.id);}
+            else if(later.kind==='http'&&later.method==='GET'&&cookies.size>0&&later.expect?.bodyIncludes?.length){if((await runStep(later)).status==='passed')alreadyTrue.add(later.id);}
+          }
+        }
         if(failed||blocked){steps.push({id:step.id,title:step.title||step.id,kind:step.kind,status:'skipped',evidence:failed?'não executada: uma etapa anterior falhou':'não executada: uma etapa anterior não pôde ser executada',durationMs:0});continue;}
         const hadCookies=cookies.size>0;
-        const result=await runStep(step,blockedReason);steps.push(result);executed.push({spec:step,result,hadCookies,cookiesAfter:cookies.size});
+        const result=await runStep(step,blockedReason);steps.push(result);executed.push({spec:step,result,hadCookies,cookiesAfter:cookies.size,preexisting:alreadyTrue.has(step.id)});
         if(result.status==='failed')failed=true;if(result.status==='blocked')blocked=true;
       }
       const cleanupNotes:string[]=[];let cleanupStatus:'done'|'partial'|'none'='none';

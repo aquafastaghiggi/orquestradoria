@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const call=async(base:string,path:string,init?:RequestInit)=>{const response=await fetch(base+path,{...init,headers:{'content-type':'application/json',...(init?.headers||{})}});return{status:response.status,body:await response.json().catch(()=>({}))};};
-async function waitFor<T>(read:()=>Promise<T>,done:(value:T)=>boolean,label:string,ms=40000){const start=Date.now();let last:T;do{last=await read();if(done(last))return last;await new Promise(resolve=>setTimeout(resolve,300));}while(Date.now()-start<ms);throw new Error(`timeout waiting for ${label}: ${JSON.stringify(last!).slice(0,500)}`);}
+async function waitFor<T>(read:()=>Promise<T>,done:(value:T)=>boolean,label:string,ms=40000){const start=Date.now();let last:T;do{try{last=await read();if(done(last))return last;}catch{/* falha transitória de conexão sob carga: tenta de novo */}await new Promise(resolve=>setTimeout(resolve,300));}while(Date.now()-start<ms);throw new Error(`timeout waiting for ${label}: ${JSON.stringify(last!).slice(0,500)}`);}
 const settled=(task:any)=>!['pending','analyzing','planning','implementing','testing','reviewing'].includes(task.status);
 
 test('Developer asks a question: the task stops asking the user (no tester/reviewer spent), the answer is passed on and the task resumes to approval',async()=>{

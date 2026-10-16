@@ -1,5 +1,6 @@
 import {existsSync,lstatSync,readdirSync,readFileSync} from 'node:fs';
-import {join,relative} from 'node:path';
+import {dirname,join,posix as posixPath,relative} from 'node:path';
+import {phpCode} from './database-isolation.js';
 
 /**
  * Inteligência de fluxo funcional: antes do Developer, lê o projeto (PHP/HTML/JS simples) e monta um mapa de páginas,
@@ -52,8 +53,58 @@ const tableNames=(source:string,pattern:RegExp)=>unique([...source.matchAll(patt
 const WRITE_SQL=/\b(?:INSERT\s+(?:IGNORE\s+)?INTO|UPDATE|REPLACE\s+INTO)\s+`?([a-z_][a-z0-9_]*)`?/gi;
 const READ_SQL=/\b(?:FROM|JOIN)\s+`?([a-z_][a-z0-9_]*)`?/gi;
 
-function analyzePage(root:string,file:string):FlowPage{
-  const source=readFileSync(file,'utf8');const rel=posix(relative(root,file));
+/** Posições (início do corpo, fim do corpo, nome) das funções PHP declaradas: `function nome(...) { corpo }`. */
+function functionRanges(code:string):Array<{name:string;start:number;end:number}>{
+  const out:Array<{name:string;start:number;end:number}>=[];
+  for(const match of code.matchAll(/\bfunction\s+&?([A-Za-z_]\w*)\s*\(/g)){
+    let i=(match.index||0)+match[0].length,depth=1,quote='';
+    for(;i<code.length&&depth>0;i++){const c=code[i];if(quote){if(c==='\\')i++;else if(c===quote)quote='';continue;}if(c==="'"||c==='"'){quote=c;continue;}if(c==='(')depth++;else if(c===')')depth--;}
+    const open=code.indexOf('{',i);const semi=code.indexOf(';',i);
+    if(open<0||(semi>=0&&semi<open))continue; // declaração sem corpo (interface/abstract)
+    depth=1;quote='';let j=open+1;
+    for(;j<code.length&&depth>0;j++){const c=code[j];if(quote){if(c==='\\')j++;else if(c===quote)quote='';continue;}if(c==="'"||c==='"'){quote=c;continue;}if(c==='{')depth++;else if(c==='}')depth--;}
+    out.push({name:match[1],start:open+1,end:j-1});
+  }
+  return out;
+}
+const extractFunctions=(code:string)=>new Map(functionRanges(code).map(range=>[range.name,code.slice(range.start,range.end)] as [string,string]));
+/** O código sem o corpo das funções: o que a página executa quando é aberta (uma biblioteca que só declara guardas não é protegida). */
+const topLevelCode=(code:string)=>{let out='',cursor=0;for(const range of functionRanges(code).sort((x,y)=>x.start-y.start)){if(range.start<cursor)continue;out+=code.slice(cursor,range.start);cursor=range.end;}return out+code.slice(cursor);};
+const SESSION_START=/\bsession_start\s*\(/,SESSION_SET=/\$_SESSION\s*\[[^\]]+\]\s*=(?!=)/,PASSWORD_VERIFY=/\bpassword_verify\s*\(/,UPLOAD=/\$_FILES\s*\[|\bmove_uploaded_file\s*\(/;
+const GUARD_BASE=(body:string)=>/\$_SESSION\s*\[/.test(body)&&/header\(\s*['"]\s*Location/i.test(body)&&/\b(?:exit|die)\b/.test(body);
+const callsOf=(code:string,known:Iterable<string>)=>{const names=new Set<string>();for(const m of code.matchAll(/(?<![>$:\w])([A-Za-z_]\w*)\s*\(/g))names.add(m[1]);const hit=new Set<string>();for(const name of known)if(names.has(name))hit.add(name);return hit;};
+
+interface ProjectIndex{
+  sessionStarters:Set<string>;sessionSetters:Set<string>;guards:Set<string>;passwordVerifiers:Set<string>;uploaders:Set<string>;
+  writes:Map<string,string[]>;reads:Map<string,string[]>;
+}
+/**
+ * Helpers que escondem a autenticação, o envio e o SQL (iniciar_sessao(), exigirLogin(), inserir_canhoto()...) são resolvidos
+ * por fecho transitivo: uma função "é" de sessão/guarda/upload/escrita se o corpo faz isso OU chama outra função que faz.
+ */
+function buildProjectIndex(codes:string[]):ProjectIndex{
+  const fns=new Map<string,string>();
+  for(const code of codes)for(const [name,body] of extractFunctions(code))fns.set(name,fns.has(name)?`${fns.get(name)}\n${body}`:body);
+  const idx:ProjectIndex={sessionStarters:new Set(),sessionSetters:new Set(),guards:new Set(),passwordVerifiers:new Set(),uploaders:new Set(),writes:new Map(),reads:new Map()};
+  const base:Array<[Set<string>,(body:string)=>boolean]>=[[idx.sessionStarters,b=>SESSION_START.test(b)],[idx.sessionSetters,b=>SESSION_SET.test(b)],[idx.guards,GUARD_BASE],[idx.passwordVerifiers,b=>PASSWORD_VERIFY.test(b)],[idx.uploaders,b=>UPLOAD.test(b)]];
+  const own=new Map<string,{w:string[];r:string[]}>();
+  for(const [name,body] of fns){for(const [set,test] of base)if(test(body))set.add(name);own.set(name,{w:tableNames(body,WRITE_SQL),r:tableNames(body,READ_SQL)});}
+  for(let round=0;round<6;round++){
+    let changed=false;
+    for(const [name,body] of fns){
+      const callees=callsOf(body,fns.keys());callees.delete(name);
+      for(const [set] of base)if(!set.has(name)&&[...callees].some(c=>set.has(c))){set.add(name);changed=true;}
+      const current=own.get(name)!;
+      for(const callee of callees){const sub=own.get(callee);if(!sub)continue;for(const t of sub.w)if(!current.w.includes(t)){current.w.push(t);changed=true;}for(const t of sub.r)if(!current.r.includes(t)){current.r.push(t);changed=true;}}
+    }
+    if(!changed)break;
+  }
+  for(const [name,value] of own){idx.writes.set(name,value.w);idx.reads.set(name,value.r);}
+  return idx;
+}
+
+function analyzePage(root:string,file:string,idx:ProjectIndex,known:Set<string>):FlowPage{
+  const source=readFileSync(file,'utf8');const rel=posix(relative(root,file));const code=phpCode(source);
   const forms:FlowForm[]=[];
   for(const match of source.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/gi)){
     const attrs=match[1],body=match[2];
@@ -62,26 +113,47 @@ function analyzePage(root:string,file:string):FlowPage{
     const fields=unique([...body.matchAll(/<(?:input|select|textarea)\b[^>]*name\s*=\s*["']([^"'\[\]]+)/gi)].map(m=>m[1]));
     forms.push({method:/post/i.test(attr('method'))?'POST':'GET',action:attr('action')||rel,fields,fileFields,multipart:/multipart\/form-data/i.test(attr('enctype'))||fileFields.length>0});
   }
-  const redirects=unique([...source.matchAll(/header\(\s*['"]\s*Location:\s*([^'"\s]+)/gi)].map(m=>m[1]));
-  const includes=unique([...source.matchAll(/\b(?:require|include)(?:_once)?\s*\(?\s*['"]([^'"]+)['"]/gi)].map(m=>m[1]));
-  const usesSession=/\bsession_start\s*\(/.test(source);
-  const readsSession=/\$_SESSION\s*\[/.test(source);
-  const guard=/(?:!\s*isset\(\s*\$_SESSION|empty\(\s*\$_SESSION)[^;{]*\)\s*\{?[^}]*?(?:header\(\s*['"]\s*Location|exit|die)/is.test(source)||/(?:require|include)(?:_once)?\s*\(?\s*['"][^'"]*(?:auth|guard|session|login_check|verifica)[^'"]*['"]/i.test(source);
-  const verifiesPassword=/\bpassword_verify\s*\(/.test(source)||/\$_POST\s*\[\s*['"](?:senha|password|pass)['"]/i.test(source);
-  const handlesUpload=/\$_FILES\s*\[/.test(source)||/\bmove_uploaded_file\s*\(/.test(source);
-  const setsSession=usesSession&&/\$_SESSION\s*\[[^\]]+\]\s*=(?!=)/.test(source);
+  const redirects=unique([...code.matchAll(/header\(\s*['"]\s*Location:\s*([^'"\s]+)/gi)].map(m=>m[1]));
+  const includes=unique([...code.matchAll(/\b(?:require|include)(?:_once)?\s*\(?\s*(?:__DIR__\s*\.\s*)?['"]([^'"]+)['"]/gi)].map(m=>m[1]));
+  const calls=callsOf(code,known);
+  const calledIn=(set:Set<string>)=>[...calls].some(name=>set.has(name));
+  const topCalls=callsOf(topLevelCode(code),known);
+  const topCalledIn=(set:Set<string>)=>[...topCalls].some(name=>set.has(name));
+  const usesSession=SESSION_START.test(code)||calledIn(idx.sessionStarters)||topCalledIn(idx.guards);
+  const readsSession=/\$_SESSION\s*\[/.test(code);
+  const guardOld=/(?:!\s*isset\(\s*\$_SESSION|empty\(\s*\$_SESSION)[^;{]*\)\s*\{?[^}]*?(?:header\(\s*['"]\s*Location|exit|die)/is.test(code)||/(?:require|include)(?:_once)?\s*\(?\s*['"][^'"]*(?:auth|guard|session|login_check|verifica)[^'"]*['"]/i.test(code);
+  const verifiesPassword=PASSWORD_VERIFY.test(code)||calledIn(idx.passwordVerifiers)||/\$_POST\s*\[\s*['"](?:senha|password|pass)['"]/i.test(code);
+  const handlesUpload=UPLOAD.test(code)||calledIn(idx.uploaders);
+  const setsSession=usesSession&&(SESSION_SET.test(code)||calledIn(idx.sessionSetters));
   const isEndpoint=!/<\/?(?:html|body|form|table)\b/i.test(source)&&/\bjson_encode\s*\(|Content-Type:\s*application\/json/i.test(source);
+  const tablesWritten=tableNames(code,WRITE_SQL),tablesRead=tableNames(code,READ_SQL);
+  for(const name of calls){for(const t of idx.writes.get(name)||[])if(!tablesWritten.includes(t))tablesWritten.push(t);for(const t of idx.reads.get(name)||[])if(!tablesRead.includes(t))tablesRead.push(t);}
   return{
     file:rel,route:`/${rel}`,kind:isEndpoint?'endpoint':'page',
-    requiresAuth:Boolean(usesSession||readsSession)&&guard,setsSession,verifiesPassword,handlesUpload,
-    forms,tablesRead:tableNames(source,READ_SQL),tablesWritten:tableNames(source,WRITE_SQL),redirects,includes,
-    usesOrqEnv:/getenv\(\s*['"]ORQ_DB_/.test(source)
+    requiresAuth:topCalledIn(idx.guards)||(Boolean(usesSession||readsSession)&&guardOld),setsSession,verifiesPassword,handlesUpload,
+    forms,tablesRead,tablesWritten,redirects,includes,
+    usesOrqEnv:/getenv\(\s*['"]ORQ_DB_/.test(code)
   };
+}
+
+/** Une as tabelas lidas/gravadas pelos arquivos incluídos (parciais com SELECT/INSERT), até 3 níveis, entre as páginas analisadas. */
+function mergeIncludedTables(pages:FlowPage[]){
+  const byPath=new Map(pages.map(page=>[page.file,page]));
+  const resolveInclude=(from:string,include:string)=>{const target=posixPath.normalize(posixPath.join(dirname(from),include.replace(/^\/+/,'')));return byPath.get(target)||byPath.get(posixPath.normalize(include.replace(/^\/+/,'')));};
+  const original=new Map(pages.map(page=>[page.file,{w:[...page.tablesWritten],r:[...page.tablesRead]}]));
+  for(const page of pages){
+    const seen=new Set<string>([page.file]);let frontier=[page];
+    for(let depth=0;depth<3;depth++){
+      const next:FlowPage[]=[];
+      for(const current of frontier)for(const include of current.includes){const target=resolveInclude(current.file,include);if(!target||seen.has(target.file))continue;seen.add(target.file);next.push(target);const o=original.get(target.file)!;for(const t of o.w)if(!page.tablesWritten.includes(t))page.tablesWritten.push(t);for(const t of o.r)if(!page.tablesRead.includes(t))page.tablesRead.push(t);}
+      frontier=next;
+    }
+  }
 }
 
 const TOPICS:Array<{kind:Exclude<FlowKind,'composite'>;label:string;pattern:RegExp}>=[
   {kind:'auth',label:'autenticação (login)',pattern:/\b(?:login|logar|entrar|autentic\w*|senha|sess[aã]o|sign\s?in)\b/i},
-  {kind:'upload',label:'envio de arquivo (upload)',pattern:/\b(?:upload|enviar|anexar|anexo|foto|imagem|comprovante|arquivo|documento|cnh)\b/i},
+  {kind:'upload',label:'envio de arquivo (upload)',pattern:/\b(?:upload|envi(?:ar|a|o|e|ado|ada|ados|adas|os)|anex\w*|fotos?|imagem|comprovante|canhotos?|arquivo|documento|cnh)\b/i},
   {kind:'listing',label:'listagem/conferência dos dados enviados',pattern:/\b(?:listar|lista|listagem|confer\w*|aprovar|aprova[cç][aã]o|visualizar|consultar|exibir|mostrar)\b/i}
 ];
 
@@ -89,12 +161,18 @@ export function analyzeProjectFlows(location:string,request=''):FlowPlan{
   const empty:FlowPlan={version:1,pages:[],auth:{guardedPages:[],certainty:'hypothesis'},database:{usesDatabase:false,usesOrqEnv:false,tables:[]},flows:[],criteria:[],facts:[],hypotheses:[],ambiguities:[],truncated:false};
   if(!location||!existsSync(location))return empty;
   const {files,truncated}=scan(location);
-  const pages:FlowPage[]=[];for(const file of files){try{pages.push(analyzePage(location,file));}catch{/* arquivo ilegível: ignorado */}}
+  const codes:string[]=[];for(const file of files){try{codes.push(phpCode(readFileSync(file,'utf8')));}catch{/* arquivo ilegível: ignorado */}}
+  const idx=buildProjectIndex(codes);
+  const known=new Set<string>([...idx.sessionStarters,...idx.sessionSetters,...idx.guards,...idx.passwordVerifiers,...idx.uploaders,...idx.writes.keys(),...idx.reads.keys()]);
+  const pages:FlowPage[]=[];for(const file of files){try{pages.push(analyzePage(location,file,idx,known));}catch{/* arquivo ilegível: ignorado */}}
+  mergeIncludedTables(pages);
   const facts:string[]=[],hypotheses:string[]=[],ambiguities:string[]=[];
 
   const loginPages=pages.filter(p=>p.verifiesPassword&&p.setsSession);
   const guarded=pages.filter(p=>p.requiresAuth).map(p=>p.file);
-  const uploadPages=pages.filter(p=>p.handlesUpload||p.forms.some(f=>f.fileFields.length));
+  const handlers=pages.filter(p=>p.handlesUpload);
+  const formPages=pages.filter(p=>!p.handlesUpload&&p.forms.some(f=>f.fileFields.length));
+  const uploadPages=handlers.length?handlers:formPages;
   const tableMap=new Map<string,{writtenBy:string[];readBy:string[]}>();
   for(const page of pages){
     for(const t of page.tablesWritten)(tableMap.get(t)||tableMap.set(t,{writtenBy:[],readBy:[]}).get(t)!).writtenBy.push(page.file);
@@ -130,15 +208,21 @@ export function analyzeProjectFlows(location:string,request=''):FlowPlan{
 
   if(uploadPages.length>1)ambiguities.push(`Há mais de um ponto de upload (${uploadPages.map(p=>p.file).join(', ')}); o pedido se refere a qual?`);
   const upload=uploadPages[0];
+  const uploadForm=upload?formPages.flatMap(p=>p.forms.filter(f=>f.multipart&&posix(f.action).replace(/^\.?\//,'').split('?')[0]===upload.file)).at(0):undefined;
   const uploadSteps:FlowStepPlan[]=upload?[
-    {id:'upload-1',title:`Enviar um arquivo de teste por multipart para ${upload.forms.find(f=>f.multipart)?.action||upload.route}`,page:upload.file,certainty:'fact',evidence:`${upload.file} recebe arquivo`},
+    {id:'upload-1',title:`Enviar um arquivo de teste por multipart para ${upload.forms.find(f=>f.multipart)?.action||uploadForm?.action||upload.route}`,page:upload.file,certainty:'fact',evidence:`${upload.file} recebe arquivo`},
     ...(upload.tablesWritten.length?[{id:'upload-2',title:`Confirmar no MySQL o registro gravado em ${upload.tablesWritten.join(', ')}`,page:upload.file,certainty:'fact' as Certainty,evidence:`INSERT/UPDATE em ${upload.tablesWritten.join(', ')}`}]:[{id:'upload-2',title:'Confirmar onde o envio é registrado (banco ou disco)',page:upload.file,certainty:'hypothesis' as Certainty,evidence:'nenhuma gravação em tabela foi identificada no handler'}])
   ]:[{id:'upload-1',title:'Enviar um arquivo de teste',certainty:'hypothesis',evidence:'não há ponto de upload identificado no código'}];
   flows.push({id:'flow-upload',name:'Upload e gravação',kind:'upload',required:asked.upload,source:asked.upload?'request':'code',certainty:upload?'fact':'hypothesis',steps:uploadSteps,files:upload?[upload.file]:[]});
 
   const writtenTables=upload?upload.tablesWritten:[];
-  const listers=pages.filter(p=>p!==upload&&p.tablesRead.some(t=>writtenTables.includes(t)));
-  if(listers.length>1)ambiguities.push(`Mais de uma página lista os dados enviados (${listers.map(p=>p.file).join(', ')}); qual é a "conferência"?`);
+  const requestWords=unique(request.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[^a-z0-9]+/).filter(word=>word.length>=5));
+  const score=(page:FlowPage)=>{
+    const name=page.file.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    return(requestWords.some(word=>name.includes(word.slice(0,6)))?3:0)+(page.requiresAuth?2:0)+(/\bconfer/.test(name)?2:0)+(page.kind==='page'?1:0)+(page.tablesWritten.some(t=>writtenTables.includes(t))?-3:0)+(page.forms.some(f=>f.method==='POST')?0:1);
+  };
+  const listers=pages.filter(p=>p!==upload&&p.tablesRead.some(t=>writtenTables.includes(t))).sort((a,b)=>score(b)-score(a)||a.file.localeCompare(b.file));
+  if(listers.length>1&&score(listers[0])===score(listers[1]))ambiguities.push(`Mais de uma página lista os dados enviados (${listers.slice(0,3).map(p=>p.file).join(', ')}) sem um critério que as distinga; qual é a "conferência"?`);
   const lister=listers[0];
   const listingSteps:FlowStepPlan[]=lister?[
     {id:'listing-1',title:`Abrir ${lister.route} e ver o registro enviado na listagem`,page:lister.file,certainty:'fact',evidence:`${lister.file} lê ${lister.tablesRead.filter(t=>writtenTables.includes(t)).join(', ')}, a mesma tabela gravada por ${upload!.file}`}
@@ -194,6 +278,7 @@ export function renderFlowPlan(plan:FlowPlan|undefined,role:'developer'|'tester'
     lines.push(
       'Rules: reuse and edit the existing files above in place; do not recreate files or rewrite working code. In a fix round change only what the failing step needs.',
       'In your final JSON add "functionalFlows": one entry per required flow, {"flowId":"flow-...","name":"...","steps":[...]} so the Tester can run the flow. Step kinds: {"id","title","kind":"php","script":"database/seed.php"} (runs a script from database/, scripts/, tests/ or bin/ with ORQ_DB_*), {"kind":"http","method":"GET|POST","path":"/login.php","form":{"email":"..."},"files":{"field":{"name":"a.pdf","content":"...","contentType":"application/pdf"}},"expect":{"status":302,"redirectTo":"upload.php","bodyIncludes":["..."]}} (cookies are kept between steps; only the local PHP server is used), {"kind":"db","query":"SELECT COUNT(*) FROM t WHERE ...","expect":{"min":1}} (SELECT only). Use temporary test data only; list "cleanup":[{"kind":"db-exec","sql":"DELETE FROM t WHERE ..."}] for rows you create. Never claim a flow passed: the Tester runs it.',
+      'Correlation rule for upload/MySQL/listing flows: use the SAME document/NF created by the test. The SELECT must cite a value sent in the upload (form field such as the NF token, or the file name) and either return the identifier shown in the listing (expect.firstValue, for example the NF number) or cite it in the query; the listing GET must expect that identifier (and any text that is NOT already there before the upload). Data that already existed before the upload is not accepted as proof.',
       'If one of the ambiguities above changes what you must build, set status BLOCKED and put the question in "questions"; otherwise choose the most likely reading and record the assumption in notes.',
       'If you cannot make a required flow testable (for example the test database is unavailable), say so in notes; an unvalidated required flow blocks approval.',
       existing.length?`Existing files involved: ${existing.join(', ')}.`:''
