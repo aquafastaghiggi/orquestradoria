@@ -179,3 +179,68 @@ test('modo real sem confirmação: nada é criado nem executado no servidor real
     for(const dir of [tmp,orq])try{rmSync(dir,{recursive:true,force:true});}catch{/* melhor esforço */}
   }
 });
+
+test('problemas detectados: falha simulada → detecção sem créditos → diagnóstico e prompt automáticos → correção só no worktree → aprovação manual',{timeout:240000},async()=>{
+  const tmp=mkdtempSync(join(tmpdir(),'orq-selfrepair-prob-'));
+  const orq=fakeOrquestradoria();const other=mkdtempSync(join(tmpdir(),'orq-other-'));
+  git(other,'init','-q','-b','main');git(other,'config','user.email','o@example.test');git(other,'config','user.name','o');writeFileSync(join(other,'README.md'),'x');git(other,'add','.');git(other,'commit','-q','-m','init');
+  const before=snapshotOf(orq);
+  const server=await startServer(tmp,{...MOCK_ENV,ORQ_SELF_REPO:orq,ORQ_TEST_FIXTURE_EDITS:JSON.stringify([{file:'src/sum.js',find:'a - b; // BUG simulado: deveria somar',replace:'a + b;'}])});
+  const {default:Database}=await import('better-sqlite3');
+  try{
+    // ---- falha simulada: duas tasks falham com o mesmo timeout do provider; uma terceira falhou mas foi retomada e aprovada
+    const ws=(await api(server,'POST','/api/workspaces',{name:'Projeto qualquer',location:other})).body;
+    const mk=async(title:string)=>(await api(server,'POST',`/api/workspaces/${ws.id}/tasks`,{title,description:'d'})).body.id as string;
+    const [a,b,healthy]=[await mk('Criar tela A'),await mk('Criar tela B'),await mk('Criar tela C')];
+    const sqlite=new Database(join(tmp,'self.db'));
+    const fail=(taskId:string,status:string,env:string)=>{sqlite.prepare('UPDATE tasks SET status=?,environmentStatus=?,updatedAt=? WHERE id=?').run(status,env,new Date().toISOString(),taskId);sqlite.prepare("INSERT INTO executions (id,taskId,role,provider,model,status,startedAt,finishedAt,error) VALUES (?,?,'developer','claude-code','claude-sonnet',?,?,?,?)").run(`sim-${taskId}`,taskId,'failed',new Date().toISOString(),new Date().toISOString(),`Claude Code timed out after 180000ms (token=segredo-${taskId})`);};
+    fail(a,'failed','failed_preserved');fail(b,'failed','failed_preserved');fail(healthy,'approved','approved_waiting_action');
+    sqlite.close();
+    const tasksBefore=(await api(server,'GET','/api/self-repair')).body.diagnosableTasks.length;
+
+    // ---- detecção: sem IA, sem créditos, sem criar nada
+    const list=(await api(server,'GET','/api/self-repair/problems')).body;
+    assert.equal(list.credits,'none');assert.equal(list.problems.length,1,JSON.stringify(list.problems.map((p:any)=>p.title)));
+    const problem=list.problems[0];
+    assert.equal(problem.category,'timeout');assert.equal(problem.status,'confirmed');assert.equal(problem.occurrences,2);assert.deepEqual(problem.taskIds.sort(),[a,b].sort());
+    assert.equal(problem.taskIds.includes(healthy),false,'task aprovada não conta');assert.match(problem.probableCause,/limite de tempo/);
+    assert.equal(JSON.stringify(list).includes('segredo-'),false);
+    assert.equal((await api(server,'GET',`/api/self-repair/problems?taskId=${a}`)).body.problems.length,1,'a task com problema aponta para ele (botão Investigar)');
+    assert.equal((await api(server,'GET',`/api/self-repair/problems?taskId=${healthy}`)).body.problems.length,0);
+    assert.equal((await api(server,'GET','/api/self-repair')).body.repairs.length,0);
+    assert.equal(existsSync(join(tmp,'worktrees'))?1:0,0,'nenhum worktree criado só por detectar');
+
+    // ---- diagnóstico e prompt montados automaticamente (também sem créditos)
+    const built=(await api(server,'POST',`/api/self-repair/problems/${problem.id}/prompt`,{})).body;
+    assert.equal(built.credits,'none');assert.ok([a,b].includes(built.sourceTaskId));assert.ok(built.diagnosis.chars>0);
+    assert.match(built.prompt,/Timeout do provider \(developer\)/);assert.match(built.prompt,/problema CONFIRMADO por evidência direta/);assert.match(built.prompt,/Claude Code timed out after/);
+    assert.equal(built.prompt.includes('segredo-'),false);
+    assert.equal((await api(server,'GET','/api/self-repair')).body.repairs.length,0,'montar o prompt não executa nada');
+
+    // ---- execução (mock, sem custo) a partir do problema, só no worktree isolado
+    const created=await api(server,'POST','/api/self-repair/repairs',{prompt:built.prompt,sourceTaskId:built.sourceTaskId,problemId:problem.id});
+    assert.equal(created.status,202,JSON.stringify(created.body));const id=created.body.taskId;
+    const done=await until(async()=>(await api(server,'GET',`/api/self-repair/repairs/${id}`)).body,d=>d?.task?.status==='approved'||d?.task?.status==='failed','pipeline do Mock concluir');
+    assert.equal(done.task.status,'approved');assert.equal(done.repair.problemId,problem.id);assert.equal(done.safety.isolated,true);
+    assert.equal(snapshotOf(orq).sum,before.sum,'a instância continua intacta');assert.equal(snapshotOf(orq).head,before.head);
+    assert.match(readFileSync(join(resolve(done.task.worktreePath),'src','sum.js'),'utf8'),/a \+ b/);
+
+    // ---- sem alerta duplicado e sem investigação repetida
+    const after=(await api(server,'GET','/api/self-repair/problems')).body.problems;
+    assert.equal(after.length,1,'o problema continua sendo um só');assert.equal(after[0].investigation.taskId,id);
+    const again=await api(server,'POST','/api/self-repair/repairs',{prompt:built.prompt,sourceTaskId:built.sourceTaskId,problemId:problem.id});
+    assert.equal(again.status,409);assert.equal(again.body.code,'already_investigating');assert.equal((await api(server,'GET','/api/self-repair')).body.repairs.length,1);
+    assert.equal((await api(server,'POST',`/api/tasks/${id}/apply`,{})).body.code,'self_repair_apply_blocked');
+
+    // ---- histórico, aprovação e merge manual preservados
+    const approved=await api(server,'POST',`/api/self-repair/repairs/${id}/approve`,{});
+    assert.equal(approved.status,200);assert.equal(approved.body.merged,false);assert.match(approved.body.instructions.merge.join(' '),/merge --no-ff/);
+    {const now=snapshotOf(orq);assert.deepEqual({...now,branches:[]},{...before,branches:[]},'repositório idêntico depois de aprovar (a branch da task existe, mas não é a atual)');assert.ok(now.branches.length===before.branches.length+1);}
+    assert.equal((await api(server,'GET',`/api/self-repair/repairs/${id}`)).body.repair.decision,'approved');
+    assert.equal((await api(server,'GET','/api/self-repair')).body.diagnosableTasks.length>=tasksBefore,true);
+    assert.equal(alive(server.pid),true);assert.equal((await fetch(`${server.base}/health`)).ok,true);
+  }finally{
+    await server.stop();
+    for(const dir of [tmp,orq,other])try{rmSync(dir,{recursive:true,force:true});}catch{/* melhor esforço */}
+  }
+});

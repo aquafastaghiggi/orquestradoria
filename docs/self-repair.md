@@ -47,3 +47,25 @@ criado sem confirmação.
   (`pnpm install --frozen-lockfile`); o Tester em modo comando pode ficar bloqueado até lá.
 - Aprovar não aplica a correção: o merge, o reinício e o uso da versão nova são manuais, por decisão de segurança.
 - O diagnóstico lê apenas o que o Orquestradoria registrou (eventos, execuções, auditoria); não lê arquivos de log do sistema.
+
+## Problemas detectados
+
+`Autocorreção > Problemas detectados` lista falhas e anomalias do próprio Orquestradoria, calculadas na hora a partir do que ele já
+registra (execuções, auditoria, status das tasks). **Não usa IA nem créditos.**
+
+- Cada problema traz **causa provável** (hipótese), **gravidade** (alta/média/baixa), **evidências** (task, fonte, trecho, horário;
+  segredos removidos) e quantas ocorrências/tasks afeta. Achados iguais são agrupados por assinatura, sem alertas duplicados.
+- **Confirmado**: há evidência direta (execução que o provider/pipeline registrou como falha, execução parada pelo watchdog, banco de
+  teste indisponível). **Suspeita (não confirmada)**: padrão que sugere problema sem prová-lo (comandos recusados repetidamente em 2+
+  tasks, fluxos obrigatórios sem validação em 2+ tasks, ciclo de correção sem progresso, execução órfã). Suspeitas nunca viram "erro".
+- Não entram: falhas que já foram resolvidas (task aprovada depois), testes do projeto do usuário reprovando e casos isolados.
+- **Investigar na Autocorreção** (no problema, ou no card de ações de uma task com problema) monta o diagnóstico e o prompt de
+  correção automaticamente, deixa-os editáveis e só então segue o fluxo normal: confirmação de créditos, worktree isolado, aprovação e
+  merge manuais. Um problema com investigação aberta mostra "Em investigação" e recusa investigar de novo (`already_investigating`).
+  Para uma suspeita, o prompt manda primeiro confirmar a causa e não alterar nada se não houver defeito.
+
+API: `GET /api/self-repair/problems[?taskId=]` · `POST /api/self-repair/problems/:id/prompt`. `POST /api/self-repair/repairs` aceita `problemId`.
+
+Limitações: as regras cobrem as falhas que o Orquestradoria registra (providers, watchdog, preflight de banco, política de comandos,
+fluxos, ciclo de correção); um defeito que não deixa rastro nesses registros não é detectado. O agrupamento é por assinatura do
+texto do erro: mensagens muito diferentes para a mesma causa viram problemas separados.

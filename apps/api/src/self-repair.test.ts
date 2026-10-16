@@ -179,7 +179,7 @@ test('interface: menu Autocorreção, confirmação de gasto e ações de aprova
   const main=readFileSync(new URL('../../web/src/main.tsx',import.meta.url),'utf8');
   const page=readFileSync(new URL('../../web/src/SelfRepairPage.tsx',import.meta.url),'utf8');
   const nav=readFileSync(new URL('../../web/src/navigation.ts',import.meta.url),'utf8');
-  assert.match(nav,/'selfrepair'/);assert.match(main,/onClick=\{openSelfRepair\}><Wrench size=\{17\}\/>Autocorreção<\/button>/);assert.match(main,/view==='selfrepair'&&<SelfRepairPage notify=\{notify\}\/>/);
+  assert.match(nav,/'selfrepair'/);assert.match(main,/onClick=\{\(\)=>openSelfRepair\(\)\}><Wrench size=\{17\}\/>Autocorreção<\/button>/);assert.match(main,/view==='selfrepair'&&<SelfRepairPage notify=\{notify\} focusTaskId=\{selfRepairFocus\}\/>/);assert.match(main,/onInvestigate&&\(failed\|\|task\.status==='needs_input'\)&&<button className="secondary" onClick=\{\(\)=>onInvestigate\(task\.id\)\}>Investigar na Autocorreção<\/button>/);assert.match(page,/Problemas detectados/);assert.match(page,/Suspeita \(não confirmada\)/);assert.match(page,/Causa provável/);assert.match(page,/Evidências/);assert.match(page,/Investigar na Autocorreção/);assert.match(page,/Nenhum crédito foi usado/);
   for(const expected of [/Planner → Developer → Tester → Reviewer/,/worktree isolado/,/Confirmar uso de créditos reais/,/Confirmo que posso consumir créditos reais/,/Aprovar/,/Solicitar ajustes/,/Descartar/,/Console/,/Arquivos e diff/,/Testes e revisão/,/Histórico/,/Nada foi mesclado/,/sem merge\/deploy\/restart/])assert.match(page,expected);
   assert.doesNotMatch(page,/\/apply/);assert.doesNotMatch(page,/\/api\/tasks\/\$\{[^}]+\}\/(?:apply|run)/);
   assert.match(page,/confirmSpend:confirm/);
@@ -192,4 +192,113 @@ test('servidor: Apply genérico e missões bloqueados no workspace da autocorre�
   assert.match(server,/process\.env\.NODE_ENV==='test'&&process\.env\.ORQ_TEST_FIXTURE_EDITS\)providers\.developer=new FixtureDeveloperAdapter/);
   const module=readFileSync(new URL('./self-repair.ts',import.meta.url),'utf8');
   for(const forbidden of [/\bapply\b.*isolation/i,/git\s+merge/,/git\s+push/,/restart/i])assert.equal(forbidden.test(module.replace(/\/\*[\s\S]*?\*\//g,'').split('\n').filter(l=>!/^\s*(\/\/|\*)/.test(l)&&!/instruc|afterMerge|merge:\[|review:\[|verify:\[|note:|Reinicie|autoRestart|restarted|reiniciad|reiniciar|merge --no-ff|git -C/.test(l)).join('\n')),false,String(forbidden));
+});
+
+// =====================================================================================================
+// Problemas detectados (sem IA, sem créditos)
+// =====================================================================================================
+import {buildProblemPrompt,detectProblems} from './self-repair-detect.js';
+
+function detectDb(){
+  const db=memoryDb();ensureSelfRepairTables(db);
+  db.exec("ALTER TABLE audit_logs ADD COLUMN dummy TEXT");
+  return db;
+}
+let seq=0;
+const addTask=(db:Database.Database,id:string,status:string,extra:{title?:string;updatedAt?:string;environmentStatus?:string}={})=>db.prepare('INSERT INTO tasks (id,workspaceId,title,description,status,environmentStatus,updatedAt) VALUES (?,?,?,?,?,?,?)').run(id,'w1',extra.title||`Task ${id}`,'d',status,extra.environmentStatus||'failed_preserved',extra.updatedAt||new Date().toISOString());
+const addExec=(db:Database.Database,taskId:string,role:string,status:string,error:string|null,structured?:unknown,at=new Date().toISOString())=>db.prepare('INSERT INTO executions (id,taskId,role,provider,model,status,startedAt,finishedAt,error,structuredResult) VALUES (?,?,?,?,?,?,?,?,?,?)').run(`e${++seq}`,taskId,role,'claude-code','m1',status,at,at,error,structured?JSON.stringify(structured):null);
+const addAudit=(db:Database.Database,taskId:string,action:string,metadata:unknown,at=new Date().toISOString())=>db.prepare('INSERT INTO audit_logs (id,actor,action,taskId,metadata,timestamp) VALUES (?,?,?,?,?,?)').run(`a${++seq}`,'system',action,taskId,JSON.stringify(metadata),at);
+
+test('detecção: a mesma falha em várias tasks vira UM problema confirmado, agrupado e sem segredos',()=>{
+  const db=detectDb();
+  for(const [i,id] of ['t1','t2','t3'].entries()){addTask(db,id,'failed');addExec(db,id,'developer','failed',`Claude Code timed out after ${180000+i}ms em C:\\Users\\x\\worktrees\\${id} ORQ_DB_PASSWORD=segredo-${i}`);}
+  const found=detectProblems(db);
+  assert.equal(found.length,1,JSON.stringify(found.map(p=>p.title)));
+  const [problem]=found;
+  assert.equal(problem.category,'timeout');assert.equal(problem.status,'confirmed');assert.equal(problem.occurrences,3);assert.deepEqual(problem.taskIds.sort(),['t1','t2','t3']);
+  assert.equal(problem.severity,'high','gravidade média sobe para alta quando afeta 3+ tasks');
+  assert.match(problem.probableCause,/limite de tempo/);assert.ok(problem.evidence.length>=1&&problem.evidence.length<=5);
+  assert.equal(JSON.stringify(problem).includes('segredo-'),false);
+  assert.deepEqual(detectProblems(db).map(p=>p.id),found.map(p=>p.id),'idempotente: mesmos ids, sem duplicar');
+});
+
+test('detecção: falhas já resolvidas, falhas do projeto do usuário e casos isolados não viram problema',()=>{
+  const db=detectDb();
+  addTask(db,'ok','approved',{environmentStatus:'approved_waiting_action'});addExec(db,'ok','developer','failed','Claude Code timed out after 180000ms');          // falhou, foi retomada e aprovou
+  addTask(db,'tf','failed');addExec(db,'tf','tester','completed',null,{status:'FAILED',commands:[{label:'php -l a.php',status:'failed'}]});               // testes do próprio projeto reprovaram
+  addTask(db,'solo','needs_input');addExec(db,'solo','developer','completed',null,{permissionDenials:[{tool:'Bash',command:'echo "$X"; cat a'}]});         // um caso isolado é ruído
+  assert.deepEqual(detectProblems(db),[]);
+});
+
+test('detecção: padrões sem prova são SUSPEITA, nunca confirmados; confirmados vêm primeiro',()=>{
+  const db=detectDb();
+  for(const id of ['d1','d2']){addTask(db,id,'needs_input');addExec(db,id,'developer','completed',null,{permissionDenials:[{tool:'Bash',command:'printenv ORQ_DB_NAME'}]});}
+  for(const id of ['f1','f2']){addTask(db,id,'needs_manual_review');addExec(db,id,'tester','completed',null,{status:'BLOCKED',blockReason:'required_flow_unvalidated',summary:'Fluxo obrigatório não validado'});}
+  addTask(db,'c1','failed');addExec(db,'c1','developer','failed','spawn claude ENOENT');
+  const found=detectProblems(db);
+  const byCategory=Object.fromEntries(found.map(p=>[p.category,p]));
+  assert.equal(byCategory.permission_denials.status,'suspected');assert.equal(byCategory.flow_unvalidated.status,'suspected');assert.equal(byCategory.cli_missing.status,'confirmed');
+  assert.equal(byCategory.cli_missing.severity,'high');assert.equal(byCategory.permission_denials.severity,'low');
+  assert.equal(found[0].status,'confirmed','confirmados antes das suspeitas');
+  for(const p of found.filter(item=>item.status==='suspected'))assert.match(p.probableCause,/Pode ser|pode ser|não é um erro confirmado|não está confirmado|também pode/,p.category);
+});
+
+test('detecção: execução órfã é só suspeita, e some quando há processo vivo ou atualização recente',()=>{
+  const db=detectDb();const now=new Date('2026-10-16T12:00:00Z');
+  addTask(db,'old','implementing',{updatedAt:'2026-10-16T09:00:00Z',environmentStatus:'active'});addTask(db,'fresh','testing',{updatedAt:'2026-10-16T11:58:00Z',environmentStatus:'active'});
+  const found=detectProblems(db,{now,running:{has:()=>false}});
+  assert.equal(found.length,1);assert.equal(found[0].category,'orphan_execution');assert.equal(found[0].status,'suspected');assert.deepEqual(found[0].taskIds,['old']);
+  assert.deepEqual(detectProblems(db,{now,running:{has:id=>id==='old'}}),[]);
+});
+
+test('detecção: banco de teste indisponível (auditoria) é confirmado; investigação aberta aparece no problema',()=>{
+  const db=detectDb();
+  addTask(db,'t1','failed');addAudit(db,'t1','project_database.unavailable',{error:'Não consegui conectar. O MySQL está ligado no painel do XAMPP?'});
+  const [problem]=detectProblems(db);
+  assert.equal(problem.category,'db_unavailable');assert.equal(problem.status,'confirmed');
+  assert.equal(problem.investigation,undefined);
+  addTask(db,'fix1','approved',{environmentStatus:'approved_waiting_action'});
+  db.prepare('INSERT INTO self_repairs (taskId,workspaceId,prompt,mode,createdAt,problemId) VALUES (?,?,?,?,?,?)').run('fix1','w1','p','mock','t',problem.id);
+  assert.deepEqual(detectProblems(db)[0].investigation,{taskId:'fix1',status:'approved',decision:null});
+  db.prepare("UPDATE self_repairs SET decision='discarded' WHERE taskId='fix1'").run();
+  assert.equal(detectProblems(db)[0].investigation,undefined,'descartada: pode investigar de novo');
+});
+
+test('prompt do problema: evidências, grau de certeza e task de origem, sem segredos',()=>{
+  const db=detectDb();
+  addTask(db,'t1','failed');addExec(db,'t1','developer','failed','spawn claude ENOENT token=abc123456789');
+  addTask(db,'d1','needs_input');addTask(db,'d2','needs_input');
+  for(const id of ['d1','d2'])addExec(db,id,'developer','completed',null,{permissionDenials:[{tool:'Bash',command:'printenv X'}]});
+  const found=detectProblems(db);
+  const confirmed=buildProblemPrompt(db,found.find(p=>p.status==='confirmed')!),suspected=buildProblemPrompt(db,found.find(p=>p.status==='suspected')!);
+  assert.match(confirmed.prompt,/problema CONFIRMADO por evidência direta/);assert.match(confirmed.prompt,/spawn claude ENOENT/);assert.match(confirmed.prompt,/teste de regressão/);
+  assert.equal(confirmed.prompt.includes('abc123456789'),false);assert.equal(confirmed.sourceTaskId,'t1');assert.ok(confirmed.bundle&&confirmed.bundle.text.includes('Execuções'));
+  assert.match(suspected.prompt,/SUSPEITA ainda não confirmada/);assert.match(suspected.prompt,/não altere nada e explique/);
+});
+
+test('rotas de problemas: leitura e prompt não criam task nem gastam; investigar duas vezes é recusado',async()=>{
+  await withRoutes({mode:'real'},async({base,calls,db})=>{
+    db.prepare('INSERT INTO workspaces (id,name,type,location,branch,status,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?)').run('w1','Projeto X','local','C:/x','main','active','t','t');
+    addTask(db,'t1','failed');addTask(db,'t2','failed');
+    for(const id of ['t1','t2'])addExec(db,id,'developer','failed','Claude Code timed out after 180000ms');
+    const before=(db.prepare('SELECT COUNT(*) AS n FROM tasks').get() as any).n;
+    const list=await (await fetch(`${base}/api/self-repair/problems`)).json() as any;
+    assert.equal(list.credits,'none');assert.equal(list.confirmed,1);assert.equal(list.problems[0].occurrences,2);
+    assert.equal((await (await fetch(`${base}/api/self-repair/problems?taskId=t1`)).json() as any).problems.length,1);
+    assert.equal((await (await fetch(`${base}/api/self-repair/problems?taskId=zzz`)).json() as any).problems.length,0);
+    const id=list.problems[0].id;
+    const prompt=await post(base,`/api/self-repair/problems/${id}/prompt`,{});
+    assert.equal(prompt.status,200);assert.equal(prompt.body.credits,'none');assert.match(prompt.body.prompt,/Timeout do provider/);assert.ok(prompt.body.sourceTaskId);assert.ok(prompt.body.diagnosis.chars>0);
+    assert.equal((await post(base,'/api/self-repair/problems/naoexiste/prompt',{})).body.code,'problem_not_found');
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM tasks').get() as any).n,before,'nada foi criado');assert.equal(calls.create.length,0);assert.equal(calls.run.length,0);
+    // execução com IA só depois da confirmação (modo real)
+    const noConfirm=await post(base,'/api/self-repair/repairs',{prompt:prompt.body.prompt,sourceTaskId:prompt.body.sourceTaskId,problemId:id});
+    assert.equal(noConfirm.body.code,'spend_confirmation_required');assert.equal(calls.create.length,0);
+    const ok=await post(base,'/api/self-repair/repairs',{prompt:prompt.body.prompt,sourceTaskId:prompt.body.sourceTaskId,problemId:id,confirmSpend:true,taskBudgetUsd:0.3});
+    assert.equal(ok.status,202);assert.equal(calls.create.length,1);
+    const again=await post(base,'/api/self-repair/repairs',{prompt:'x',problemId:id,confirmSpend:true,taskBudgetUsd:0.3});
+    assert.equal(again.status,409);assert.equal(again.body.code,'already_investigating');assert.equal(again.body.taskId,ok.body.taskId);assert.equal(calls.create.length,1);
+    const shown=(await (await fetch(`${base}/api/self-repair/problems`)).json() as any).problems[0];
+    assert.equal(shown.investigation.taskId,ok.body.taskId);
+  });
 });

@@ -36,7 +36,13 @@ async function request(method:string,url:string,body?:unknown){
   return{ok:response.ok,status:response.status,data};
 }
 
-export default function SelfRepairPage({notify}:{notify:Notify}){
+type Problem={id:string;category:string;title:string;severity:'high'|'medium'|'low';status:'confirmed'|'suspected';probableCause:string;evidence:Array<{taskId:string;taskTitle:string;source:string;text:string;at:string}>;occurrences:number;taskIds:string[];firstSeen:string;lastSeen:string;investigation?:{taskId:string;status:string;decision:string|null}};
+const SEVERITY_LABEL:Record<string,string>={high:'Alta',medium:'Média',low:'Baixa'};
+
+export default function SelfRepairPage({notify,focusTaskId}:{notify:Notify;focusTaskId?:string|null}){
+  const[problems,setProblems]=useState<Problem[]|null>(null);
+  const[problemId,setProblemId]=useState<string|null>(null);
+  const[problemNote,setProblemNote]=useState('');
   const[overview,setOverview]=useState<Overview|null>(null);
   const[error,setError]=useState('');
   const[prompt,setPrompt]=useState('');
@@ -57,6 +63,30 @@ export default function SelfRepairPage({notify}:{notify:Notify}){
     if(r.ok)setOverview(r.data);else setError(r.data?.error||'Não foi possível carregar a Autocorreção.');
   },[]);
   useEffect(()=>{void loadOverview();},[loadOverview]);
+
+  const loadProblems=useCallback(async()=>{
+    const r=await request('GET','/api/self-repair/problems');
+    if(r.ok)setProblems(r.data.problems);
+  },[]);
+  useEffect(()=>{void loadProblems();},[loadProblems]);
+
+  /** Monta diagnóstico e prompt do problema escolhido (sem IA, sem créditos); o usuário só revisa e envia. */
+  const investigate=async(problem:Problem)=>{
+    const r=await request('POST',`/api/self-repair/problems/${problem.id}/prompt`,{});
+    if(!r.ok){notify(r.data?.error||'Não foi possível montar o diagnóstico.','error');void loadProblems();return;}
+    setPrompt(r.data.prompt);setSourceTaskId(r.data.sourceTaskId||'');setProblemId(problem.id);
+    setProblemNote(`Diagnóstico montado automaticamente (${r.data.diagnosis?r.data.diagnosis.chars+' caracteres de logs e eventos':'sem task de origem'}). Nenhum crédito foi usado. Revise o pedido e envie para a autocorreção.`);
+    document.getElementById('selfrepair-new')?.scrollIntoView({behavior:'smooth',block:'start'});
+  };
+  const focusDone=useRef<string|null>(null);
+  useEffect(()=>{
+    if(!focusTaskId||!problems||focusDone.current===focusTaskId)return;
+    focusDone.current=focusTaskId;
+    const match=problems.find(p=>p.taskIds.includes(focusTaskId)&&!p.investigation);
+    if(match)void investigate(match);
+    else{setSourceTaskId(focusTaskId);setPrompt('Diagnosticar a falha desta task e propor a correção no Orquestradoria.');setProblemNote('Nenhum problema detectado automaticamente para esta task; o diagnóstico (logs, erros e eventos) será anexado pela task de origem.');}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[focusTaskId,problems]);
 
   const loadDetail=useCallback(async(id:string)=>{
     const [d,t]=await Promise.all([request('GET',`/api/self-repair/repairs/${id}`),request('GET',`/api/tasks/${id}`)]);
@@ -82,12 +112,13 @@ export default function SelfRepairPage({notify}:{notify:Notify}){
     setBusy(true);
     try{
       const url=kind==='create'?'/api/self-repair/repairs':`/api/self-repair/repairs/${selected}/${kind==='adjust'?'request-changes':'resume'}`;
-      const body=kind==='create'?{...bodyBase,confirmSpend:confirm}:{feedback:feedbackText,confirmSpend:confirm,taskBudgetUsd:taskBudget?Number(taskBudget):undefined};
+      const body=kind==='create'?{...bodyBase,problemId:problemId||undefined,confirmSpend:confirm}:{feedback:feedbackText,confirmSpend:confirm,taskBudgetUsd:taskBudget?Number(taskBudget):undefined};
       const r=await request('POST',url,body);
       if(r.status===409&&(r.data.code==='spend_confirmation_required'||r.data.code==='task_budget_required')){setPending({kind,info:r.data,feedback:feedbackText});setConfirmed(false);return;}
+      if(r.status===409&&r.data?.code==='already_investigating'){notify(r.data.error,'info');setSelected(r.data.taskId);return;}
       if(!r.ok){notify(r.data?.error||'A solicitação falhou.','error');if(r.data?.code==='budget_blocked')setPending(null);return;}
       setPending(null);setConfirmed(false);
-      if(kind==='create'){setPrompt('');setSourceTaskId('');setSelected(r.data.taskId);setTab('progress');notify('Autocorreção iniciada num worktree isolado.','success');}
+      if(kind==='create'){setPrompt('');setSourceTaskId('');setProblemId(null);setProblemNote('');void loadProblems();setSelected(r.data.taskId);setTab('progress');notify('Autocorreção iniciada num worktree isolado.','success');}
       else{setFeedback('');notify(kind==='adjust'?'Ajuste enviado ao Developer.':'Execução retomada.','success');if(selected)void loadDetail(selected);}
       void loadOverview();
     }finally{setBusy(false);}
@@ -129,8 +160,26 @@ export default function SelfRepairPage({notify}:{notify:Notify}){
       <small>Orçamento: hoje {usd(overview.budget.spend.todayUsd)} de {overview.budget.settings.dailyUsd?usd(overview.budget.settings.dailyUsd):'sem limite'} · mês {usd(overview.budget.spend.monthUsd)} de {overview.budget.settings.monthlyUsd?usd(overview.budget.settings.monthlyUsd):'sem limite'}{overview.budget.spend.blocked&&<b> · BLOQUEADO: {overview.budget.spend.message}</b>}</small>
     </section>
 
-    <section className="panel selfrepair-new">
+    <section className="panel selfrepair-problems" aria-label="Problemas detectados">
+      <div className="panel-title">PROBLEMAS DETECTADOS <span className="muted">{problems?`${problems.filter(p=>p.status==='confirmed').length} confirmado(s) · ${problems.filter(p=>p.status==='suspected').length} suspeita(s)`:'analisando…'}</span></div>
+      <small className="muted">Detectados a partir de eventos, falhas de pipeline, execuções e histórico das tasks. A detecção não usa IA nem créditos. Uma <b>suspeita</b> é um padrão que sugere um problema, mas não o prova.</small>
+      {problems&&!problems.length&&<div className="panel-empty">Nenhum problema detectado no histórico recente.</div>}
+      {problems?.map(p=><article key={p.id} className={`problem ${p.status}`}>
+        <div className="problem-head"><strong>{p.title}</strong>
+          <span className={`status-badge ${p.status==='confirmed'?'failed':''}`}>{p.status==='confirmed'?'Confirmado':'Suspeita (não confirmada)'}</span>
+          <span className={`status-badge ${p.severity==='high'?'failed':''}`}>Gravidade {SEVERITY_LABEL[p.severity]}</span>
+          <small>{p.occurrences} ocorrência(s) em {p.taskIds.length} task(s) · última {new Date(p.lastSeen).toLocaleString('pt-BR')}</small></div>
+        <p><b>Causa provável:</b> {p.probableCause}</p>
+        <details><summary>Evidências ({p.evidence.length})</summary><ul>{p.evidence.map((e,i)=><li key={i}><small>{new Date(e.at).toLocaleString('pt-BR')} · {e.source} · task "{e.taskTitle}"</small><br/><code>{e.text}</code></li>)}</ul></details>
+        <div className="selfrepair-actions">{p.investigation
+          ?<button className="secondary" onClick={()=>{setSelected(p.investigation!.taskId);setTab('progress');}}>Em investigação — abrir</button>
+          :<button className="primary" onClick={()=>void investigate(p)}>Investigar na Autocorreção</button>}</div>
+      </article>)}
+    </section>
+
+    <section className="panel selfrepair-new" id="selfrepair-new">
       <div className="panel-title">NOVO PEDIDO</div>
+      {problemNote&&<div className="notice info">{problemNote}</div>}
       <label>O que corrigir ou melhorar
         <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} rows={5} maxLength={8000} placeholder="Descreva o bug ou a melhoria no Orquestradoria. Ex.: o botão Aplicar fica ativo mesmo com a task em execução."/></label>
       <label>Diagnosticar uma task existente (logs, erros, eventos e contexto são anexados automaticamente)

@@ -4,6 +4,7 @@ import {nanoid} from 'nanoid';
 import type Database from 'better-sqlite3';
 import type {Express} from 'express';
 import type {BudgetSettings,SpendStatus} from './spend-limits.js';
+import {buildProblemPrompt,detectProblems} from './self-repair-detect.js';
 
 /**
  * Centro de Autocorreção: diagnosticar, corrigir e evoluir o PRÓPRIO Orquestradoria.
@@ -71,6 +72,7 @@ const parse=(value:unknown)=>{try{return typeof value==='string'?JSON.parse(valu
 // ---------- tabelas e workspace ----------
 export function ensureSelfRepairTables(db:Database.Database){
   db.exec('CREATE TABLE IF NOT EXISTS self_repairs (taskId TEXT PRIMARY KEY,workspaceId TEXT NOT NULL,sourceTaskId TEXT,prompt TEXT NOT NULL,mode TEXT NOT NULL,spendConfirmedAt TEXT,repoHeadAtCreate TEXT,baseBranch TEXT,decision TEXT,decidedAt TEXT,decisionNote TEXT,createdAt TEXT NOT NULL)');
+  if(!(db.prepare('PRAGMA table_info(self_repairs)').all() as any[]).some(column=>column.name==='problemId'))db.exec('ALTER TABLE self_repairs ADD COLUMN problemId TEXT');
 }
 export function ensureSelfWorkspace(db:Database.Database,root:string,branch:string,now:string):any{
   const location=resolve(root);
@@ -202,7 +204,8 @@ export function registerSelfRepairRoutes(ctx:SelfRepairContext){
       budget:{settings:ctx.budget.load(),spend:ctx.budget.spend()},
       isolation:{worktreeRequired:true,isolationMode:process.env.TASK_ISOLATION_MODE==='current-workspace'?'current-workspace':'worktree'},
       repairs:repairs.map(r=>({taskId:r.taskId,title:r.title,status:r.status,currentStage:r.currentStage,environmentStatus:r.environmentStatus,decision:r.decision,mode:r.mode,sourceTaskId:r.sourceTaskId,createdAt:r.createdAt,updatedAt:r.taskUpdatedAt})),
-      diagnosableTasks:tasks
+      diagnosableTasks:tasks,
+      problemSummary:(()=>{const list=detectProblems(db,{running:ctx.running});return{confirmed:list.filter(p=>p.status==='confirmed').length,suspected:list.filter(p=>p.status==='suspected').length};})()
     });
   });
 
@@ -216,6 +219,20 @@ export function registerSelfRepairRoutes(ctx:SelfRepairContext){
     send(res,200,{...info,diagnosis:bundle?{sections:bundle.sections,chars:bundle.text.length,truncated:bundle.truncated}:null,code:undefined,error:undefined});
   });
 
+  /** Problemas detectados: só leitura do que o Orquestradoria já registrou; nenhuma IA, nenhum crédito. */
+  app.get('/api/self-repair/problems',(req,res)=>{
+    const taskId=typeof req.query.taskId==='string'&&req.query.taskId?req.query.taskId:null;
+    const all=detectProblems(db,{running:ctx.running});
+    const problems=taskId?all.filter(problem=>problem.taskIds.includes(taskId)):all;
+    send(res,200,{generatedAt:ctx.now(),credits:'none',confirmed:problems.filter(p=>p.status==='confirmed').length,suspected:problems.filter(p=>p.status==='suspected').length,problems});
+  });
+  app.post('/api/self-repair/problems/:problemId/prompt',(req,res)=>{
+    const problem=detectProblems(db,{running:ctx.running}).find(item=>item.id===req.params.problemId);
+    if(!problem)return send(res,404,{code:'problem_not_found',error:'Este problema não é mais detectado (talvez já tenha sido resolvido).'});
+    const built=buildProblemPrompt(db,problem);
+    send(res,200,{credits:'none',problem:{id:problem.id,title:problem.title,status:problem.status,severity:problem.severity},prompt:built.prompt,sourceTaskId:built.sourceTaskId,diagnosis:built.bundle?{sections:built.bundle.sections,chars:built.bundle.text.length,truncated:built.bundle.truncated}:null});
+  });
+
   app.post('/api/self-repair/repairs',async(req,res)=>{
     const c=context();if(!c)return unavailable(res);
     if(process.env.TASK_ISOLATION_MODE==='current-workspace')return send(res,409,{code:'self_repair_requires_worktree',error:'A autocorreção só roda em worktree isolado; TASK_ISOLATION_MODE=current-workspace alteraria a instância em execução.'});
@@ -225,6 +242,11 @@ export function registerSelfRepairRoutes(ctx:SelfRepairContext){
     if(prompt.length>MAX_PROMPT_CHARS)return send(res,400,{code:'prompt_too_long',error:`O pedido deve ter no máximo ${MAX_PROMPT_CHARS} caracteres.`});
     const source:any=sourceTaskId?db.prepare('SELECT id,title FROM tasks WHERE id=?').get(sourceTaskId):null;
     if(sourceTaskId&&!source)return send(res,404,{code:'source_task_not_found',error:'A task a diagnosticar não foi encontrada.'});
+    const problemId=typeof req.body?.problemId==='string'&&req.body.problemId?req.body.problemId:null;
+    if(problemId){
+      const open:any=db.prepare("SELECT taskId FROM self_repairs WHERE problemId=? AND COALESCE(decision,'')<>'discarded' ORDER BY createdAt DESC").get(problemId);
+      if(open)return send(res,409,{code:'already_investigating',error:'Este problema já está em investigação. Abra a correção existente ou descarte-a antes de investigar de novo.',taskId:open.taskId});
+    }
     const gate=await spendGate(c.workspace.id,req.body);
     if(!gate.ok)return send(res,gate.status,gate.body);
     const bundle=sourceTaskId?buildDiagnosisBundle(db,sourceTaskId):null;
@@ -237,7 +259,7 @@ export function registerSelfRepairRoutes(ctx:SelfRepairContext){
       db.prepare('DELETE FROM tasks WHERE id=?').run(task.id);
       return send(res,409,{code:'self_repair_requires_worktree',error:'A task não foi criada em worktree isolado; a autocorreção foi recusada.'});
     }
-    db.prepare('INSERT INTO self_repairs (taskId,workspaceId,sourceTaskId,prompt,mode,spendConfirmedAt,repoHeadAtCreate,baseBranch,createdAt) VALUES (?,?,?,?,?,?,?,?,?)').run(task.id,c.workspace.id,sourceTaskId,prompt||`(diagnóstico de ${source?.title})`,gate.info.mode,gate.paid?ctx.now():null,c.state.headSha,c.state.branch,ctx.now());
+    db.prepare('INSERT INTO self_repairs (taskId,workspaceId,sourceTaskId,prompt,mode,spendConfirmedAt,repoHeadAtCreate,baseBranch,createdAt,problemId) VALUES (?,?,?,?,?,?,?,?,?,?)').run(task.id,c.workspace.id,sourceTaskId,prompt||`(diagnóstico de ${source?.title})`,gate.info.mode,gate.paid?ctx.now():null,c.state.headSha,c.state.branch,ctx.now(),problemId);
     ctx.audit('self_repair.created',{taskId:task.id,sourceTaskId,mode:gate.info.mode,spendConfirmed:gate.paid,taskBudgetUsd:gate.paid?(gate as any).taskBudgetUsd:0,repoHead:c.state.headSha,baseBranch:c.state.branch,diagnosisChars:bundle?.text.length||0},task.id);
     ctx.emit('self_repair.created',{mode:gate.info.mode,sourceTaskId},task.id);
     const started=await callHandler(ctx.handlers.runTask,{params:{id:task.id}});
@@ -260,7 +282,7 @@ export function registerSelfRepairRoutes(ctx:SelfRepairContext){
     const adjustable=ctx.canRequestAdjustment(task,Boolean(ctx.attention(task.id)));
     const approvable=!repair.decision&&task.status==='approved'&&task.environmentStatus==='approved_waiting_action';
     send(res,200,{
-      repair:{taskId:repair.taskId,sourceTaskId:repair.sourceTaskId,prompt:repair.prompt,mode:repair.mode,decision:repair.decision,decidedAt:repair.decidedAt,spendConfirmedAt:repair.spendConfirmedAt,createdAt:repair.createdAt},
+      repair:{taskId:repair.taskId,problemId:repair.problemId,sourceTaskId:repair.sourceTaskId,prompt:repair.prompt,mode:repair.mode,decision:repair.decision,decidedAt:repair.decidedAt,spendConfirmedAt:repair.spendConfirmedAt,createdAt:repair.createdAt},
       task:{id:task.id,title:task.title,status:task.status,currentStage:task.currentStage,environmentStatus:task.environmentStatus,taskBranch:task.taskBranch,worktreePath:task.worktreePath,baseBranch:task.baseBranch,baseCommitSha:task.baseCommitSha,updatedAt:task.updatedAt,running:ctx.running.has(task.id)},
       stages:executions.map(e=>({role:e.role,status:e.status,provider:e.provider,model:e.model,startedAt:e.startedAt,finishedAt:e.finishedAt,error:e.error||undefined,summary:e.structuredResult?.summary})),
       tests:testResult?{status:testResult.status,summary:testResult.summary,commands:(testResult.commands||[]).map((x:any)=>({label:x.label,status:x.status,exitCode:x.exitCode})),notes:(testResult.notes||[]).slice(0,20),functionalFlows:testResult.functionalFlows?{status:testResult.functionalFlows.status,required:testResult.functionalFlows.required}:undefined}:null,
